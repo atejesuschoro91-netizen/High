@@ -20,52 +20,232 @@ local ActiveConnections = {}
 local thisScriptStopped = false
 
 -- ==========================================
--- NOVO RESET (Botão Reset na tela)
+-- NOVO RESET (Insta Reset) 
 -- ==========================================
-local function SetupResetButton()
-    local existingGui = PlayerGui:FindFirstChild("Reset")
-    if existingGui then
-        existingGui:Destroy()
+local resetting = false
+local resetCooldown = false
+local resetThread = nil
+local currentCharacter = nil
+local resetSuccessful = false
+local stopResetSequence = false
+local cameraLocked = false
+local lockedCameraCFrame = nil
+
+-- Configurações do Reset
+local RESET_CONFIG = {
+    FLING_TIME = 0.35,
+    FLING_POWER = 50000,
+    USE_VOID = true,
+    VOID_TIME = 0.5,
+    TIMEOUT = 5,
+    CAM_BIND = "HighHubInstaResetCam"
+}
+
+local function hide_locally(obj)
+    if obj:IsA("BasePart") or obj:IsA("Decal") or obj:IsA("MeshPart") then
+        pcall(function()
+            obj.LocalTransparencyModifier = 1
+        end)
     end
-    
-    local function Reset()
-        local character = LocalPlayer.Character
-        if character then
-            local hrp = character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 10000000, hrp.AssemblyLinearVelocity.Z)
-            end
-        end
-    end
-    
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "Reset"
-    screenGui.ResetOnSpawn = false
-    screenGui.Parent = PlayerGui
-    
-    local resetButton = Instance.new("TextButton")
-    resetButton.Name = "ResetButton"
-    resetButton.Size = UDim2.new(0, 100, 0, 35)
-    resetButton.AnchorPoint = Vector2.new(0.5, 1)
-    resetButton.Position = UDim2.new(0.5, 0, 1, -900)
-    resetButton.BackgroundColor3 = Color3.fromRGB(220, 40, 40)
-    resetButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    resetButton.Text = "Reset"
-    resetButton.Font = Enum.Font.SourceSansBold
-    resetButton.TextSize = 18
-    resetButton.Parent = screenGui
-    
-    local uiCorner = Instance.new("UICorner")
-    uiCorner.CornerRadius = UDim.new(0, 8)
-    uiCorner.Parent = resetButton
-    
-    resetButton.MouseButton1Click:Connect(Reset)
-    
-    return screenGui
 end
 
--- Inicializa o botão de reset
-SetupResetButton()
+local function insta_reset()
+    if resetting or resetCooldown then return end
+    resetCooldown = true
+    resetting = true
+    
+    local char = LocalPlayer.Character
+    if not char or not char.Parent then 
+        resetting = false
+        resetCooldown = false
+        return 
+    end
+    
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then
+        resetting = false
+        resetCooldown = false
+        return 
+    end
+    
+    local hrp = hum.RootPart or char:FindFirstChild("HumanoidRootPart")
+    local cam = workspace.CurrentCamera
+    
+    -- Trava a câmera durante o reset
+    local frozen = cam.CFrame
+    local old_type = cam.CameraType
+    cameraLocked = true
+    lockedCameraCFrame = frozen
+    
+    resetThread = task.spawn(function()
+        pcall(function()
+            cam.CameraType = Enum.CameraType.Scriptable
+            RunService:BindToRenderStep(RESET_CONFIG.CAM_BIND, Enum.RenderPriority.Camera.Value + 1, function()
+                if cameraLocked and lockedCameraCFrame then
+                    cam.CFrame = lockedCameraCFrame
+                end
+            end)
+        end)
+        
+        -- Esconde o personagem localmente
+        local added
+        pcall(function()
+            for _, obj in ipairs(char:GetDescendants()) do 
+                pcall(hide_locally, obj) 
+            end
+            added = char.DescendantAdded:Connect(function(obj) 
+                pcall(hide_locally, obj) 
+            end)
+        end)
+        
+        local new_char
+        local respawned = LocalPlayer.CharacterAdded:Connect(function(c) 
+            new_char = c 
+        end)
+        
+        -- Função para destravar o personagem
+        local function unlock()
+            pcall(function() hum.PlatformStand = false end)
+            pcall(function() hum.Sit = false end)
+            pcall(function() hum.AutoRotate = true end)
+            pcall(function() hum.HipHeight = 0 end)
+        end
+        unlock()
+        
+        -- Remove colisões e ancora partes
+        for _, obj in ipairs(char:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                pcall(function() 
+                    obj.Anchored = false 
+                    obj.CanCollide = false 
+                end)
+            elseif obj.Name == "SeatWeld" or obj:IsA("Weld") or obj:IsA("Motor6D") then
+                pcall(function() obj:Destroy() end)
+            end
+        end
+        
+        local started = os.clock()
+        local function alive_hrp()
+            if hrp and hrp.Parent then return hrp end
+            hrp = hum.RootPart or char:FindFirstChild("HumanoidRootPart")
+            if hrp and hrp.Parent then return hrp end
+            return nil
+        end
+        
+        -- FASE 1: Fling para cima
+        local fling_until = os.clock() + RESET_CONFIG.FLING_TIME
+        while not new_char and os.clock() < fling_until and hum.Parent do
+            unlock()
+            pcall(function() hum.HipHeight = 1e30 end)
+            local root = alive_hrp()
+            if root then
+                pcall(function() 
+                    root.Anchored = false 
+                    root.AssemblyLinearVelocity = Vector3.new(0, RESET_CONFIG.FLING_POWER, 0)
+                    root.Velocity = Vector3.new(0, RESET_CONFIG.FLING_POWER, 0)
+                end)
+            end
+            RunService.Heartbeat:Wait()
+        end
+        
+        -- FASE 2: Void se necessário
+        if RESET_CONFIG.USE_VOID and not new_char then
+            local floor = -500
+            pcall(function() floor = workspace.FallenPartsDestroyHeight end)
+            local void_until = os.clock() + RESET_CONFIG.VOID_TIME
+            while not new_char and os.clock() < void_until do
+                local root = alive_hrp()
+                if not root then break end
+                pcall(function() 
+                    root.CFrame = CFrame.new(0, floor - 500, 0)
+                    root.AssemblyLinearVelocity = Vector3.new(0, -RESET_CONFIG.FLING_POWER, 0)
+                end)
+                RunService.Heartbeat:Wait()
+            end
+        end
+        
+        -- FASE 3: Forçar morte
+        while not new_char and os.clock() - started < RESET_CONFIG.TIMEOUT do
+            if hum.Parent then
+                pcall(function() 
+                    hum.Health = 0 
+                    hum:ChangeState(Enum.HumanoidStateType.Dead) 
+                end)
+            end
+            if char.Parent then 
+                pcall(function() char:BreakJoints() end) 
+            end
+            task.wait(0.05)
+        end
+        
+        -- Limpeza
+        pcall(function() 
+            if respawned then respawned:Disconnect() end 
+        end)
+        if added then 
+            pcall(function() added:Disconnect() end) 
+        end
+        pcall(function() 
+            RunService:UnbindFromRenderStep(RESET_CONFIG.CAM_BIND) 
+        end)
+        
+        -- Restaura câmera
+        cameraLocked = false
+        pcall(function()
+            cam.CameraType = old_type == Enum.CameraType.Scriptable and Enum.CameraType.Custom or old_type
+            if new_char then
+                local new_hum = new_char:FindFirstChildOfClass("Humanoid") or new_char:WaitForChild("Humanoid", 3)
+                if new_hum then cam.CameraSubject = new_hum end
+            end
+        end)
+        
+        resetting = false
+        resetCooldown = false
+        resetThread = nil
+        currentCharacter = nil
+        stopResetSequence = false
+        resetSuccessful = true
+    end)
+end
+
+local function StopResetSequence()
+    stopResetSequence = true
+    if resetThread then
+        task.cancel(resetThread)
+        resetThread = nil
+    end
+    resetCooldown = false
+    resetting = false
+    currentCharacter = nil
+    cameraLocked = false
+    
+    pcall(function()
+        RunService:UnbindFromRenderStep(RESET_CONFIG.CAM_BIND)
+    end)
+end
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.delay(0.1, function()
+        StopResetSequence()
+        resetCooldown = false
+        resetting = false
+        currentCharacter = nil
+        resetSuccessful = false
+        stopResetSequence = false
+        cameraLocked = false
+    end)
+end)
+
+-- Mantém a câmera travada durante o reset
+task.spawn(function()
+    local camera = workspace.CurrentCamera
+    while not thisScriptStopped do
+        task.wait(0.016)
+        if cameraLocked and lockedCameraCFrame and camera then
+            camera.CFrame = lockedCameraCFrame
+        end
+    end
+end)
 
 -- ==========================================
 -- PING LAGGER 
@@ -411,14 +591,7 @@ local function _artHandleArgs(...)
             local now = tick()
             if now - TinyState.LastFire < 3 then return end
             TinyState.LastFire = now
-            -- Chama o novo reset
-            local character = LocalPlayer.Character
-            if character then
-                local hrp = character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 10000000, hrp.AssemblyLinearVelocity.Z)
-                end
-            end
+            insta_reset()
             return
         end
     end
@@ -479,14 +652,7 @@ local function _arjHandleArgs(...)
             local now = tick()
             if now - JailState.LastFire < 3 then return end
             JailState.LastFire = now
-            -- Chama o novo reset
-            local character = LocalPlayer.Character
-            if character then
-                local hrp = character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 10000000, hrp.AssemblyLinearVelocity.Z)
-                end
-            end
+            insta_reset()
             return
         end
     end
@@ -1496,12 +1662,8 @@ local function startReturnToBase()
 end
 
 local function doReset()
-    local character = LocalPlayer.Character
-    if character then
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 10000000, hrp.AssemblyLinearVelocity.Z)
-        end
+    if Character then
+        insta_reset()
     end
 end
 
@@ -2256,7 +2418,7 @@ local oldN = PlayerGui:FindFirstChild("NOX SCRIPT")
 if oldN then oldN:Destroy() end
 
 -- ============================================================
--- COULEURS
+-- COULEURS (CORES FIXAS - ROSA)
 -- ============================================================
 local C = {
     accent     = Color3.fromRGB(255, 120, 180),
@@ -2711,335 +2873,6 @@ sCloseBtn.Font             = Enum.Font.GothamBold
 sCloseBtn.AutoButtonColor  = false
 sCloseBtn.Parent           = settingsHdr
 sCloseBtn.MouseButton1Click:Connect(function() settingsPanel.Visible = false end)
-
--- ============================================================
--- COLOUR PICKER
--- ============================================================
-local colorAppliers = {}
-local function regColor(fn) table.insert(colorAppliers, fn) end
-
-local cpHSV_accent = { H=0.93, S=0.60, V=0.95 }
-local cpHSV_body   = { H=0.63, S=0.21, V=0.11 }
-
-local function applyTheme(newAccent, newBody)
-    C.accent    = newAccent
-    C.accentHi  = Color3.new(math.min(1,newAccent.R*1.14), math.min(1,newAccent.G*1.18), math.min(1,newAccent.B*1.14))
-    C.body      = newBody
-    C.panel     = Color3.new(math.min(1,newBody.R+0.016), math.min(1,newBody.G+0.016), math.min(1,newBody.B+0.020))
-    C.card      = Color3.new(math.min(1,newBody.R+0.070), math.min(1,newBody.G+0.070), math.min(1,newBody.B+0.080))
-    C.iconBg    = Color3.new(math.min(1,newBody.R+0.110), math.min(1,newBody.G+0.110), math.min(1,newBody.B+0.120))
-    C.stroke    = newAccent
-    C.strokeDim = Color3.new(newAccent.R*0.56, newAccent.G*0.56, newAccent.B*0.40)
-    C.textMauve = C.accentHi
-    C.knobOn    = Color3.new(math.min(1,newAccent.R*1.17), math.min(1,newAccent.G*1.22), math.min(1,newAccent.B*1.10))
-    for _, fn in ipairs(colorAppliers) do pcall(fn) end
-end
-
-local function makePicker(titleText, initialHSV, parentFrame, pickerZIndex)
-    local PW, PH = 220, 240
-    local PAD = 10
-    local SQ = PH - 90
-
-    local frame = Instance.new("Frame")
-    frame.Size              = UDim2.new(0, PW, 0, PH)
-    frame.BackgroundColor3  = Color3.fromRGB(18, 20, 24)
-    frame.BackgroundTransparency = 0
-    frame.BorderSizePixel   = 0
-    frame.ZIndex            = pickerZIndex
-    frame.ClipsDescendants  = false
-    frame.Visible           = false
-    frame.Parent            = parentFrame
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 14)
-    local fStr = Instance.new("UIStroke", frame)
-    fStr.Color = Color3.fromRGB(60,62,68); fStr.Thickness = 1.2
-    regColor(function() if frame.Parent then fStr.Color=Color3.fromRGB(
-        math.floor(C.accent.R*60), math.floor(C.accent.G*60), math.floor(C.accent.B*60)) end end)
-
-    local titleLbl = Instance.new("TextLabel")
-    titleLbl.Size = UDim2.new(1,-36,0,28); titleLbl.Position = UDim2.new(0,PAD,0,0)
-    titleLbl.BackgroundTransparency=1; titleLbl.ZIndex=pickerZIndex+1
-    titleLbl.Text=titleText; titleLbl.TextColor3=Color3.fromRGB(220,220,228)
-    titleLbl.TextSize=13; titleLbl.Font=Enum.Font.GothamBold
-    titleLbl.TextXAlignment=Enum.TextXAlignment.Left; titleLbl.Parent=frame
-
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size=UDim2.new(0,22,0,22); closeBtn.Position=UDim2.new(1,-28,0,3)
-    closeBtn.BackgroundColor3=Color3.fromRGB(160,40,40); closeBtn.BorderSizePixel=0
-    closeBtn.ZIndex=pickerZIndex+2; closeBtn.Text="×"
-    closeBtn.TextColor3=Color3.new(1,1,1); closeBtn.TextSize=14
-    closeBtn.Font=Enum.Font.GothamBold; closeBtn.AutoButtonColor=false; closeBtn.Parent=frame
-    Instance.new("UICorner",closeBtn).CornerRadius=UDim.new(0,6)
-    closeBtn.MouseButton1Click:Connect(function() frame.Visible=false end)
-
-    local sq = Instance.new("Frame")
-    sq.Size=UDim2.new(0,PW-PAD*2,0,SQ); sq.Position=UDim2.new(0,PAD,0,30)
-    sq.BackgroundColor3=Color3.fromHSV(initialHSV.H,1,1)
-    sq.BorderSizePixel=0; sq.ZIndex=pickerZIndex+1; sq.ClipsDescendants=true; sq.Parent=frame
-    Instance.new("UICorner",sq).CornerRadius=UDim.new(0,8)
-    local wOv=Instance.new("Frame",sq)
-    wOv.Size=UDim2.new(1,0,1,0); wOv.BackgroundColor3=Color3.new(1,1,1)
-    wOv.BackgroundTransparency=0; wOv.BorderSizePixel=0; wOv.ZIndex=pickerZIndex+2
-    local wGrad=Instance.new("UIGradient",wOv)
-    wGrad.Color=ColorSequence.new(Color3.new(1,1,1),Color3.new(1,1,1))
-    wGrad.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(1,1)})
-    local bOv=Instance.new("Frame",sq)
-    bOv.Size=UDim2.new(1,0,1,0); bOv.BackgroundColor3=Color3.new(0,0,0)
-    bOv.BackgroundTransparency=0; bOv.BorderSizePixel=0; bOv.ZIndex=pickerZIndex+3
-    local bGrad=Instance.new("UIGradient",bOv)
-    bGrad.Rotation=90
-    bGrad.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(1,0)})
-    local svCur=Instance.new("Frame",sq)
-    svCur.Size=UDim2.new(0,14,0,14); svCur.AnchorPoint=Vector2.new(0.5,0.5)
-    svCur.Position=UDim2.new(initialHSV.S,0,1-initialHSV.V,0)
-    svCur.BackgroundColor3=Color3.new(1,1,1); svCur.BorderSizePixel=0; svCur.ZIndex=pickerZIndex+5
-    Instance.new("UICorner",svCur).CornerRadius=UDim.new(1,0)
-    local svStr=Instance.new("UIStroke",svCur); svStr.Color=Color3.new(0,0,0); svStr.Thickness=2
-
-    local HUE_H = 14
-    local hueBar=Instance.new("Frame")
-    hueBar.Size=UDim2.new(0,PW-PAD*2,0,HUE_H); hueBar.Position=UDim2.new(0,PAD,0,30+SQ+8)
-    hueBar.BackgroundColor3=Color3.new(1,0,0); hueBar.BorderSizePixel=0
-    hueBar.ZIndex=pickerZIndex+1; hueBar.ClipsDescendants=true; hueBar.Parent=frame
-    Instance.new("UICorner",hueBar).CornerRadius=UDim.new(1,0)
-    local hGrad=Instance.new("UIGradient",hueBar)
-    hGrad.Color=ColorSequence.new({
-        ColorSequenceKeypoint.new(0,    Color3.fromHSV(0,    1,1)),
-        ColorSequenceKeypoint.new(1/6,  Color3.fromHSV(1/6,  1,1)),
-        ColorSequenceKeypoint.new(2/6,  Color3.fromHSV(2/6,  1,1)),
-        ColorSequenceKeypoint.new(3/6,  Color3.fromHSV(3/6,  1,1)),
-        ColorSequenceKeypoint.new(4/6,  Color3.fromHSV(4/6,  1,1)),
-        ColorSequenceKeypoint.new(5/6,  Color3.fromHSV(5/6,  1,1)),
-        ColorSequenceKeypoint.new(1,    Color3.fromHSV(1,    1,1)),
-    })
-    local hueCur=Instance.new("Frame",hueBar)
-    hueCur.Size=UDim2.new(0,4,1,4); hueCur.AnchorPoint=Vector2.new(0.5,0.5)
-    hueCur.Position=UDim2.new(initialHSV.H,0,0.5,0)
-    hueCur.BackgroundColor3=Color3.new(1,1,1); hueCur.BorderSizePixel=0; hueCur.ZIndex=pickerZIndex+3
-    Instance.new("UICorner",hueCur).CornerRadius=UDim.new(0,2)
-    local hcStr=Instance.new("UIStroke",hueCur); hcStr.Color=Color3.new(0,0,0); hcStr.Thickness=1
-
-    local previewY = 30+SQ+8+HUE_H+8
-    local preview=Instance.new("Frame")
-    preview.Size=UDim2.new(0,32,0,22); preview.Position=UDim2.new(0,PAD,0,previewY)
-    preview.BackgroundColor3=Color3.fromHSV(initialHSV.H,initialHSV.S,initialHSV.V)
-    preview.BorderSizePixel=0; preview.ZIndex=pickerZIndex+2; preview.Parent=frame
-    Instance.new("UICorner",preview).CornerRadius=UDim.new(0,6)
-    Instance.new("UIStroke",preview).Color=Color3.fromRGB(80,82,88)
-
-    local hexLbl=Instance.new("TextLabel")
-    hexLbl.Size=UDim2.new(1,-PAD*2-36,0,22); hexLbl.Position=UDim2.new(0,PAD+36+4,0,previewY)
-    hexLbl.BackgroundColor3=Color3.fromRGB(28,30,34); hexLbl.BorderSizePixel=0
-    hexLbl.ZIndex=pickerZIndex+2; hexLbl.Font=Enum.Font.Code; hexLbl.TextSize=11
-    hexLbl.TextColor3=Color3.fromRGB(200,200,208); hexLbl.Parent=frame    Instance.new("UICorner",hexLbl).CornerRadius=UDim.new(0,6)
-    local function toHex(c)
-        return string.format("#%02X%02X%02X",
-            math.floor(c.R*255+.5), math.floor(c.G*255+.5), math.floor(c.B*255+.5))
-    end
-
-    local H,S,V = initialHSV.H, initialHSV.S, initialHSV.V
-    local pickCallbacks = {}
-
-    local function updateVisuals()
-        local col = Color3.fromHSV(H,S,V)
-        sq.BackgroundColor3 = Color3.fromHSV(H,1,1)
-        svCur.Position = UDim2.new(S,0,1-V,0)
-        hueCur.Position = UDim2.new(H,0,0.5,0)
-        preview.BackgroundColor3 = col
-        hexLbl.Text = "  "..toHex(col)
-        for _, cb in ipairs(pickCallbacks) do pcall(cb, col) end
-    end
-    updateVisuals()
-
-    local dragSV=false
-    sq.InputBegan:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-            dragSV=true
-            local ap=sq.AbsolutePosition; local as=sq.AbsoluteSize
-            S=math.clamp((i.Position.X-ap.X)/as.X,0,1)
-            V=1-math.clamp((i.Position.Y-ap.Y)/as.Y,0,1)
-            updateVisuals()
-        end
-    end)
-    local dragH=false
-    hueBar.InputBegan:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-            dragH=true
-            local ap=hueBar.AbsolutePosition; local as=hueBar.AbsoluteSize
-            H=math.clamp((i.Position.X-ap.X)/as.X,0,1)
-            updateVisuals()
-        end
-    end)
-    table.insert(ActiveConnections, UserInputService.InputChanged:Connect(function(i)
-        if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
-        if dragSV then
-            local ap=sq.AbsolutePosition; local as=sq.AbsoluteSize
-            S=math.clamp((i.Position.X-ap.X)/as.X,0,1)
-            V=1-math.clamp((i.Position.Y-ap.Y)/as.Y,0,1)
-            updateVisuals()
-        elseif dragH then
-            local ap=hueBar.AbsolutePosition; local as=hueBar.AbsoluteSize
-            H=math.clamp((i.Position.X-ap.X)/as.X,0,1)
-            updateVisuals()
-        end
-    end))
-    table.insert(ActiveConnections, UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-            dragSV=false; dragH=false
-        end
-    end))
-
-    local function setHSV(h,s,v)
-        H,S,V=h,s,v; updateVisuals()
-    end
-
-    return {
-        frame    = frame,
-        onPick   = function(fn) table.insert(pickCallbacks, fn) end,
-        setHSV   = setHSV,
-    }
-end
-
-local cpBtnAccent = Instance.new("TextButton")
-cpBtnAccent.Size             = UDim2.new(0, 14, 0, 14)
-cpBtnAccent.Position         = UDim2.new(1, -66, 0.5, -7)
-cpBtnAccent.BackgroundColor3 = C.accent
-cpBtnAccent.BorderSizePixel  = 0
-cpBtnAccent.ZIndex           = 16
-cpBtnAccent.Text             = ""
-cpBtnAccent.AutoButtonColor  = false
-cpBtnAccent.Parent           = settingsHdr
-Instance.new("UICorner", cpBtnAccent).CornerRadius = UDim.new(1,0)
-local cpBtnAs = Instance.new("UIStroke",cpBtnAccent)
-cpBtnAs.Color=Color3.new(1,1,1); cpBtnAs.Thickness=1.2
-regColor(function() if cpBtnAccent.Parent then cpBtnAccent.BackgroundColor3=C.accent end end)
-
-local cpBtnBody = Instance.new("TextButton")
-cpBtnBody.Size             = UDim2.new(0, 14, 0, 14)
-cpBtnBody.Position         = UDim2.new(1, -48, 0.5, -7)
-cpBtnBody.BackgroundColor3 = C.body
-cpBtnBody.BorderSizePixel  = 0
-cpBtnBody.ZIndex           = 16
-cpBtnBody.Text             = ""
-cpBtnBody.AutoButtonColor  = false
-cpBtnBody.Parent           = settingsHdr
-Instance.new("UICorner", cpBtnBody).CornerRadius = UDim.new(1,0)
-local cpBtnBs = Instance.new("UIStroke",cpBtnBody)
-cpBtnBs.Color=Color3.new(1,1,1); cpBtnBs.Thickness=1.2
-regColor(function() if cpBtnBody.Parent then cpBtnBody.BackgroundColor3=C.body end end)
-
-local pickerAccentObj = makePicker("Pick Accent", cpHSV_accent, settingsPanel, 70)
-pickerAccentObj.frame.Position = UDim2.new(1, -230, 0, HEADER_H + 4)
-pickerAccentObj.onPick(function(col)
-    cpHSV_accent.H, cpHSV_accent.S, cpHSV_accent.V = Color3.toHSV(col)
-    applyTheme(col, C.body)
-end)
-
-local pickerBodyObj = makePicker("Pick Background", cpHSV_body, settingsPanel, 70)
-pickerBodyObj.frame.Position = UDim2.new(1, -230, 0, HEADER_H + 4)
-pickerBodyObj.onPick(function(col)
-    cpHSV_body.H, cpHSV_body.S, cpHSV_body.V = Color3.toHSV(col)
-    applyTheme(C.accent, col)
-end)
-
-cpBtnAccent.MouseButton1Click:Connect(function()
-    local wasVisible = pickerAccentObj.frame.Visible
-    pickerAccentObj.frame.Visible = false
-    pickerBodyObj.frame.Visible   = false
-    if not wasVisible then pickerAccentObj.frame.Visible = true end
-end)
-cpBtnBody.MouseButton1Click:Connect(function()
-    local wasVisible = pickerBodyObj.frame.Visible
-    pickerAccentObj.frame.Visible = false
-    pickerBodyObj.frame.Visible   = false
-    if not wasVisible then pickerBodyObj.frame.Visible = true end
-end)
-sCloseBtn.MouseButton1Click:Connect(function()
-    pickerAccentObj.frame.Visible = false
-    pickerBodyObj.frame.Visible   = false
-end)
-
-task.defer(function()
-    local gui = HIGH_HUB_GUI
-    if not gui then return end
-    local oA = Color3.fromRGB(255, 120, 180)
-    local oB = Color3.fromRGB(22, 24, 28)
-    local oP = Color3.fromRGB(26, 28, 32)
-    local oC = Color3.fromRGB(40, 42, 48)
-    local oI = Color3.fromRGB(50, 52, 58)
-    local oD = Color3.fromRGB(140, 60, 90)
-    local function near(a,b)
-        return math.abs(a.R-b.R) < 0.045 and math.abs(a.G-b.G) < 0.045 and math.abs(a.B-b.B) < 0.045
-    end
-    for _, inst in ipairs(gui:GetDescendants()) do
-        pcall(function()
-            if inst:IsA("UIStroke") then
-                if near(inst.Color, oA) then
-                    regColor(function()
-                        if inst.Parent then inst.Color = C.accent end
-                    end)
-                elseif near(inst.Color, oD) then
-                    regColor(function()
-                        if inst.Parent then inst.Color = C.strokeDim end
-                    end)
-                end
-            elseif inst:IsA("Frame") then
-                local bg = inst.BackgroundColor3
-                if near(bg, oA) then
-                    regColor(function()
-                        if inst.Parent then inst.BackgroundColor3 = C.accent end
-                    end)
-                elseif near(bg, oB) then
-                    regColor(function()
-                        if inst.Parent then inst.BackgroundColor3 = C.body end
-                    end)
-                elseif near(bg, oP) then
-                    regColor(function()
-                        if inst.Parent then inst.BackgroundColor3 = C.panel end
-                    end)
-                elseif near(bg, oC) then
-                    regColor(function()
-                        if inst.Parent then inst.BackgroundColor3 = C.card end
-                    end)
-                elseif near(bg, oI) then
-                    regColor(function()
-                        if inst.Parent then inst.BackgroundColor3 = C.iconBg end
-                    end)
-                end
-            elseif inst:IsA("ScrollingFrame") then
-                if near(inst.ScrollBarImageColor3, oA) then
-                    regColor(function()
-                        if inst.Parent then inst.ScrollBarImageColor3 = C.accent end
-                    end)
-                end
-            elseif inst:IsA("TextButton") or inst:IsA("TextLabel") then
-                if near(inst.TextColor3, oA) then
-                    regColor(function()
-                        if inst.Parent then inst.TextColor3 = C.accent end
-                    end)
-                end
-            elseif inst:IsA("UIGradient") then
-                local hasAcc = false
-                for _, kp in ipairs(inst.Color.Keypoints) do
-                    if near(kp.Value, oA) then
-                        hasAcc = true
-                        break
-                    end
-                end
-                if hasAcc then
-                    regColor(function()
-                        if inst.Parent then
-                            inst.Color = ColorSequence.new({
-                                ColorSequenceKeypoint.new(0, C.textBright),
-                                ColorSequenceKeypoint.new(0.5, C.textMauve),
-                                ColorSequenceKeypoint.new(1, C.textBright),
-                            })
-                        end
-                    end)
-                end
-            end
-        end)
-    end
-end)
 
 -- ============================================================
 -- ABAS VERTICALES
@@ -4564,13 +4397,7 @@ end)
 
 RESET.MouseButton1Click:Connect(function()
     flashBar(resetAccent)
-    local character = LocalPlayer.Character
-    if character then
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 10000000, hrp.AssemblyLinearVelocity.Z)
-        end
-    end
+    insta_reset()
 end)
 
 task.spawn(function()
@@ -4615,13 +4442,7 @@ local kbConn = UserInputService.InputBegan:Connect(function(inp, gpe)
         local target = getNearestPlayer()
         if target then blockPlayer(target) end
     elseif inp.KeyCode == keybinds.reset then
-        local character = LocalPlayer.Character
-        if character then
-            local hrp = character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 10000000, hrp.AssemblyLinearVelocity.Z)
-            end
-        end
+        insta_reset()
     end
 end)
 table.insert(ActiveConnections, kbConn)
@@ -4779,6 +4600,7 @@ local function cleanup()
     stopFlashLagger()
     stopAutoResetTiny()
     stopAutoResetJail()
+    StopResetSequence()
     stopAutoGrab()
     clearBrainrotHighlights()
     clearTpPathVisual()
