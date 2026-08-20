@@ -33,8 +33,8 @@ local lockedCameraCFrame = nil
 
 -- Configurações do Reset
 local RESET_CONFIG = {
-    FLING_TIME = 0.35,
-    FLING_POWER = 50000,
+    FLING_TIME = 0.15,
+    FLING_POWER = 55550,
     USE_VOID = true,
     VOID_TIME = 0.5,
     TIMEOUT = 5,
@@ -248,56 +248,26 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- PING LAGGER (CORRIGIDO)
+-- PING LAGGER (KAY VERSION - SUBSTITUINDO A HIGH)
 -- ==========================================
 _G.LaggerOnFlash = _G.LaggerOnFlash or false
-_G.LaggerPower   = math.clamp(_G.LaggerPower or 50, 1, 100)
-_G.FlashSpeed    = math.clamp(_G.FlashSpeed or 50, 1, 100)
+_G.LaggerPower   = _G.LaggerPower or 50   -- 0-100
 
 local laggerConn = nil
 local laggerActive = false
 
--- Função para aplicar o lag com base no power
-local function applyLagger(power)
-    if not _G.LaggerOnFlash then return end
-    pcall(function()
-        -- Converte power (1-100) para um valor de lag efetivo
-        -- Power 50 = lag médio, Power 100 = lag máximo
-        local lagValue = math.clamp(power / 15, 0.05, 6.0)
-        settings().Network.IncomingReplicationLag = lagValue
-    end)
-end
-
--- Função para remover o lag
-local function removeLagger()
-    pcall(function()
-        settings().Network.IncomingReplicationLag = 0
-    end)
-end
-
 local function startFlashLagger()
-    if not _G.LaggerOnFlash or laggerActive then return end
-    if laggerConn then 
-        pcall(function() laggerConn:Disconnect() end) 
-        laggerConn = nil 
-    end
-    
+    if not _G.LaggerOnFlash then return end
+    local strength = math.clamp(_G.LaggerPower / 40, 0.3, 3.0)
+    pcall(function()
+        settings().Network.IncomingReplicationLag = strength
+    end)
+    if laggerConn then laggerConn:Disconnect() laggerConn = nil end
     laggerActive = true
-    
-    -- Aplica o lag com o power configurado
-    applyLagger(_G.LaggerPower)
-    
-    -- Calcula a duração baseada no FlashSpeed
-    -- Speed 100 = mais rápido (duração curta), Speed 1 = mais lento (duração longa)
-    -- Duração entre 0.3s e 3.5s
-    local duration = math.clamp(3.5 - (_G.FlashSpeed / 100 * 3.2), 0.3, 3.5)
-    
-    -- Remove o lag após a duração
-    task.spawn(function()
-        task.wait(duration)
-        removeLagger()
-        laggerActive = false
+    laggerConn = task.delay(2.5, function()
+        pcall(function() settings().Network.IncomingReplicationLag = 0 end)
         laggerConn = nil
+        laggerActive = false
     end)
 end
 
@@ -307,7 +277,7 @@ local function stopFlashLagger()
         pcall(function() laggerConn:Disconnect() end)
         laggerConn = nil
     end
-    removeLagger()
+    pcall(function() settings().Network.IncomingReplicationLag = 0 end)
 end
 
 -- ==========================================
@@ -1021,6 +991,9 @@ elseif _G.AutoResetOnBalloon == nil then _G.AutoResetOnBalloon = true end
 if savedSettings.AutoFlashTP ~= nil then _G.AutoFlashTP = savedSettings.AutoFlashTP
 elseif _G.AutoFlashTP == nil then _G.AutoFlashTP = false end
 
+if savedSettings.AutoFlashLowTimer ~= nil then _G.AutoFlashLowTimer = savedSettings.AutoFlashLowTimer
+elseif _G.AutoFlashLowTimer == nil then _G.AutoFlashLowTimer = false end
+
 if savedSettings.AutoGiant ~= nil then _G.AutoGiant = savedSettings.AutoGiant
 elseif _G.AutoGiant == nil then _G.AutoGiant = false end
 
@@ -1036,11 +1009,11 @@ elseif _G.BlockMode == nil then _G.BlockMode = "normal" end
 if savedSettings.LaggerOnFlash ~= nil then _G.LaggerOnFlash = savedSettings.LaggerOnFlash
 elseif _G.LaggerOnFlash == nil then _G.LaggerOnFlash = false end
 
-if savedSettings.LaggerPower ~= nil then _G.LaggerPower = math.clamp(savedSettings.LaggerPower, 1, 100)
+if savedSettings.LaggerPower ~= nil then _G.LaggerPower = math.clamp(savedSettings.LaggerPower, 0, 100)
 elseif _G.LaggerPower == nil then _G.LaggerPower = 50 end
 
-if savedSettings.FlashSpeed ~= nil then _G.FlashSpeed = math.clamp(savedSettings.FlashSpeed, 1, 100)
-elseif _G.FlashSpeed == nil then _G.FlashSpeed = 50 end
+if savedSettings.FlashSpeed ~= nil then _G.FlashSpeed = math.clamp(savedSettings.FlashSpeed, 0, 200)
+elseif _G.FlashSpeed == nil then _G.FlashSpeed = 100 end
 
 if savedSettings.AutoBalloon ~= nil then _G.AutoBalloon = savedSettings.AutoBalloon
 elseif _G.AutoBalloon == nil then _G.AutoBalloon = false end
@@ -1100,9 +1073,6 @@ QuickPickup.set(_G.QuickPickup)
 
 if savedSettings.AntiRagdoll ~= nil then _G.AntiRagdoll = savedSettings.AntiRagdoll
 elseif _G.AntiRagdoll == nil then _G.AntiRagdoll = false end
-
-if savedSettings.AutoGrab ~= nil then _G.AutoGrab = savedSettings.AutoGrab
-elseif _G.AutoGrab == nil then _G.AutoGrab = false end
 
 local WalkItemOptions = { "Flying Carpet", "Cupid's Wings", "Witch's Broom", "Waverider", "Santa's Sleigh" }
 if savedSettings.WalkItem ~= nil and table.find(WalkItemOptions, savedSettings.WalkItem) then
@@ -1452,97 +1422,6 @@ local STOP_DIST = 5
 local SLOW_DIST = 20
 
 -- ==========================================
--- AUTO GRAB DO HUGO
--- ==========================================
-local STEAL_RADIUS = 60
-local STEAL_DURATION = 1.4
-local autoGrabStealing = false
-local AutoGrabData = {}
-local autoGrabConn = nil
-
-local function findNearestAutoGrabPrompt()
-    local c = LocalPlayer.Character
-    local hrp = c and c:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
-    local plots = Workspace:FindFirstChild("Plots")
-    if not plots then return nil end
-    local nearest, dist = nil, math.huge
-    for _, plot in ipairs(plots:GetChildren()) do
-        if not isMyPlot(plot) then
-            local pods = plot:FindFirstChild("AnimalPodiums")
-            if pods then
-                for _, pod in ipairs(pods:GetChildren()) do
-                    local base = pod:FindFirstChild("Base")
-                    if base then
-                        local sp = base:FindFirstChild("Spawn")
-                        if sp then
-                            local d = (sp.Position - hrp.Position).Magnitude
-                            if d <= STEAL_RADIUS and d < dist then
-                                local att = sp:FindFirstChild("PromptAttachment")
-                                if att then
-                                    for _, p in ipairs(att:GetChildren()) do
-                                        if p:IsA("ProximityPrompt") and isValidStealPrompt(p) then
-                                            nearest, dist = p, d
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return nearest
-end
-
-local function executeAutoGrab(prompt)
-    if autoGrabStealing then return end
-    if not AutoGrabData[prompt] then
-        AutoGrabData[prompt] = { hold = {}, trigger = {}, ready = true }
-        if getconnections then
-            for _, c in ipairs(getconnections(prompt.PromptButtonHoldBegan)) do
-                if c.Function then table.insert(AutoGrabData[prompt].hold, c.Function) end
-            end
-            for _, c in ipairs(getconnections(prompt.Triggered)) do
-                if c.Function then table.insert(AutoGrabData[prompt].trigger, c.Function) end
-            end
-        end
-    end
-    local data = AutoGrabData[prompt]
-    if not data.ready then return end
-    data.ready = false
-    autoGrabStealing = true
-    local startTime = tick()
-    task.spawn(function()
-        for _, f in ipairs(data.hold) do pcall(f) end
-        while tick() - startTime < STEAL_DURATION do
-            task.wait()
-        end
-        for _, f in ipairs(data.trigger) do pcall(f) end
-        task.wait(0.05)
-        data.ready = true
-        autoGrabStealing = false
-    end)
-end
-
-local function startAutoGrab()
-    if autoGrabConn then return end
-    autoGrabConn = RunService.Heartbeat:Connect(function()
-        if not _G.AutoGrab or autoGrabStealing or autoStealEnabled then return end
-        local ok, prompt = pcall(findNearestAutoGrabPrompt)
-        if ok and prompt then pcall(executeAutoGrab, prompt) end
-    end)
-    table.insert(ActiveConnections, autoGrabConn)
-end
-
-local function stopAutoGrab()
-    if autoGrabConn then pcall(function() autoGrabConn:Disconnect() end); autoGrabConn = nil end
-    autoGrabStealing = false
-    AutoGrabData = {}
-end
-
--- ==========================================
 -- AUTO RETURN TO BASE (OTIMIZADO)
 -- ==========================================
 local BASE_TARGET    = Vector3.new(-350.8919, -6.6011, 108.6947)
@@ -1750,7 +1629,7 @@ local PREBLOCK_DIST_BY_SLOT = {
 local clearTpPathVisual
 
 -- ==========================================
--- START TRIP TO PET SLOT (FLASH TP DO HUGO)
+-- START TRIP TO PET SLOT (FLASH TP DO HUGO COM MELHORIAS)
 -- ==========================================
 local function startTripToPetSlot(prompt, slotNumber)
     local config = SlotsConfig[slotNumber] or SlotsConfig[1]
@@ -1760,7 +1639,28 @@ local function startTripToPetSlot(prompt, slotNumber)
     if currentMovement then pcall(function() currentMovement:Disconnect() end); currentMovement = nil end
     if not Root or not Humanoid then return end
     autoStealEnabled = true
-    local Speed = 200
+    
+    -- ==========================================
+    -- FLASH SPEED TRIGGER (0% a 200%)
+    -- ==========================================
+    local flashSpeed = _G.FlashSpeed or 100
+    -- Converte 0-200% para um multiplicador de velocidade
+    -- 0% = lesma (muito lento), 100% = normal, 200% = muito rápido
+    local speedMultiplier
+    if flashSpeed <= 0 then
+        speedMultiplier = 0.05  -- quase parado (lesma)
+    elseif flashSpeed <= 1 then
+        speedMultiplier = 0.05  -- 1% também é lesma
+    elseif flashSpeed <= 10 then
+        speedMultiplier = flashSpeed / 100 * 0.3  -- muito lento
+    else
+        speedMultiplier = flashSpeed / 100  -- 1.0 em 100%, 2.0 em 200%
+    end
+    
+    local Speed = 200 * speedMultiplier
+    -- Garante que Speed nunca seja menor que 5 (para não travar completamente)
+    Speed = math.max(Speed, 5)
+    
     local grabStartDistance = 60
     local grabStarted = false
     local carpet = findTool("flying carpet")
@@ -1776,13 +1676,46 @@ local function startTripToPetSlot(prompt, slotNumber)
     Velocity.Parent = Root
     local currentPosIndex = 1
     local intermediatePauseActive = false
+    
+    -- ==========================================
+    -- UNWALK ANIM (desativa animação de caminhada durante o flash)
+    -- ==========================================
+    local savedWalkSpeed = Humanoid.WalkSpeed
+    local savedJumpPower = Humanoid.JumpPower
+    Humanoid.WalkSpeed = 0
+    Humanoid.JumpPower = 0
+    Humanoid.AutoRotate = false
+    
+    local animator = Humanoid:FindFirstChildOfClass("Animator")
+    local animPlayConn
+    if animator then
+        -- Para todas as animações atuais
+        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+            pcall(function() track:Stop(0) end)
+        end
+        -- Bloqueia novas animações
+        animPlayConn = animator.AnimationPlayed:Connect(function(track)
+            pcall(function() track:Stop(0) end)
+        end)
+        table.insert(ActiveConnections, animPlayConn)
+    end
+    
+    local function restoreMovement()
+        Humanoid.WalkSpeed = savedWalkSpeed
+        Humanoid.JumpPower = savedJumpPower
+        Humanoid.AutoRotate = true
+        if animPlayConn then pcall(function() animPlayConn:Disconnect() end) end
+    end
+    
     currentMovement = RunService.Heartbeat:Connect(function()
         if thisScriptStopped then
             if currentMovement then pcall(function() currentMovement:Disconnect() end); currentMovement = nil end
+            restoreMovement()
             return
         end
         if not Root or not Humanoid or not Root.Parent or Humanoid.Health <= 0 then
             if currentMovement then pcall(function() currentMovement:Disconnect() end); currentMovement = nil end
+            restoreMovement()
             return
         end
         if intermediatePauseActive then Velocity.VectorVelocity = Vector3.zero; return end
@@ -1832,7 +1765,7 @@ local function startTripToPetSlot(prompt, slotNumber)
             task.wait(0.1)
             
             -- ==========================================
-            -- LAGGER ATIVADO AQUI (CORRIGIDO)
+            -- LAGGER ATIVADO AQUI (KAY VERSION)
             -- ==========================================
             if _G.LaggerOnFlash then
                 startFlashLagger()
@@ -1868,6 +1801,10 @@ local function startTripToPetSlot(prompt, slotNumber)
                 end)
             end
             Camera.CameraType = Enum.CameraType.Custom
+            
+            -- Restaura a animação após o flash
+            restoreMovement()
+            
             if _G.AutoBlock then
                 local mode = _G.BlockMode or "normal"
                 task.spawn(function()
@@ -2418,6 +2355,45 @@ local function findAdversaryPlot()
     return nil
 end
 
+-- ==========================================
+-- AUTO FLASH TP ON LOW TIMER
+-- ==========================================
+local lastSeenTimerValue = nil
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if not _G.AutoFlashLowTimer then lastSeenTimerValue = nil continue end
+        if isStealing or autoStealEnabled then continue end
+        if not selectedPrompt or not selectedSlotNumber then continue end
+
+        local timeLabel = nil
+        pcall(function()
+            local advPlot = findAdversaryPlot()
+            local purchases = advPlot and advPlot:FindFirstChild("Purchases")
+            local plotBlock = purchases and purchases:FindFirstChild("PlotBlock")
+            local mainPart = plotBlock and plotBlock:FindFirstChild("Main")
+            timeLabel = mainPart and mainPart:FindFirstChild("BillboardGui") and mainPart.BillboardGui:FindFirstChild("RemainingTime")
+        end)
+        if not timeLabel then
+            lastSeenTimerValue = nil
+            continue
+        end
+
+        local converted = toSecondsOnly(timeLabel.Text)
+        local seconds = tonumber(converted:match("(%d+)"))
+        if not seconds then continue end
+
+        -- Flash TP quando o timer chega a 1
+        if seconds <= 1 and lastSeenTimerValue and lastSeenTimerValue > 1 then
+            task.spawn(function()
+                startTripToPetSlot(selectedPrompt, selectedSlotNumber)
+            end)
+        end
+
+        lastSeenTimerValue = seconds
+    end
+end)
+
 task.spawn(function()
     while true do
         pcall(updateBaseESP)
@@ -2885,7 +2861,7 @@ local function BuildHUB()
     sCloseBtn.MouseButton1Click:Connect(function() settingsPanel.Visible = false end)
 
     -- ============================================================
-    -- ABAS VERTICALES
+    -- ABAS VERTICAIS
     -- ============================================================
     local TAB_PANEL_W = 52
     local TAB_BTN_H = 32
@@ -3255,7 +3231,7 @@ local function BuildHUB()
     end
 
     -- ============================================================
-    -- OUVERTURE SETTINGS
+    -- OUVERTURA SETTINGS
     -- ============================================================
     local settingsOpen = false
     local function toggleSettings()
@@ -3661,6 +3637,7 @@ local function BuildHUB()
     settingsGetters = {
         AutoResetOnBalloon = function() return _G.AutoResetOnBalloon end,
         AutoFlashTP        = function() return _G.AutoFlashTP end,
+        AutoFlashLowTimer  = function() return _G.AutoFlashLowTimer end,
         RagdollBypass      = function() return _G.RagdollBypass end,
         AutoGiant          = function() return _G.AutoGiant end,
         AutoBlock          = function() return _G.AutoBlock end,
@@ -3686,8 +3663,7 @@ local function BuildHUB()
         QuickPickup                        = function() return _G.QuickPickup or false end,
         LaggerOnFlash                      = function() return _G.LaggerOnFlash or false end,
         LaggerPower                        = function() return _G.LaggerPower or 50 end,
-        FlashSpeed                         = function() return _G.FlashSpeed or 50 end,
-        AutoGrab                           = function() return _G.AutoGrab or false end,
+        FlashSpeed                         = function() return _G.FlashSpeed or 100 end,
     }
 
     -- ===== TAB: RESET =====
@@ -3708,6 +3684,9 @@ local function BuildHUB()
 
     -- ===== TAB: FLASH TP =====
     sectionHeader(ScrollFlash, "  FLASH TP  ")
+    toggleRow(ScrollFlash, "Auto Flash TP On Low Timer", _G.AutoFlashLowTimer, function(v)
+        _G.AutoFlashLowTimer = v
+    end)
     toggleRow(ScrollFlash, "Auto Flash TP On Reset", _G.AutoFlashTP, function(v)
         _G.AutoFlashTP = v
     end)
@@ -3718,12 +3697,14 @@ local function BuildHUB()
         _G.RagdollBypass = v
     end)
 
+    -- Lagger on Flash TP (KAY VERSION)
     toggleRow(ScrollFlash, "Lagger on Flash TP", _G.LaggerOnFlash, function(v)
         _G.LaggerOnFlash = v
         if not v then stopFlashLagger() end
         saveSettings()
     end)
 
+    -- Lagger Power Slider (KAY STYLE - 0 a 100)
     do
         sectionOrder += 1
         local lagLblRow = Instance.new("Frame")
@@ -3806,6 +3787,7 @@ local function BuildHUB()
         end)
     end
 
+    -- Flash Speed Slider (0% a 200%)
     do
         sectionOrder += 1
         local speedLblRow = Instance.new("Frame")
@@ -3832,7 +3814,7 @@ local function BuildHUB()
         speedValLbl.Size = UDim2.new(1, 0, 0, 13)
         speedValLbl.Position = UDim2.new(0, 0, 0, 12)
         speedValLbl.BackgroundTransparency = 1
-        speedValLbl.Text = tostring(math.floor(_G.FlashSpeed))
+        speedValLbl.Text = tostring(math.floor(_G.FlashSpeed)) .. "%"
         speedValLbl.TextColor3 = C.accent
         speedValLbl.Font = Enum.Font.GothamBold
         speedValLbl.TextSize = isMob and 9 or 10
@@ -3852,7 +3834,7 @@ local function BuildHUB()
         Instance.new("UICorner", speedTrack).CornerRadius = UDim.new(1, 0)
 
         local speedFill = Instance.new("Frame")
-        local speedPct = _G.FlashSpeed / 100
+        local speedPct = _G.FlashSpeed / 200
         speedPct = math.clamp(speedPct, 0, 1)
         speedFill.Size = UDim2.new(speedPct, 0, 1, 0)
         speedFill.BackgroundColor3 = C.accent
@@ -3863,9 +3845,9 @@ local function BuildHUB()
 
         local function updateSpeed(pct)
             pct = math.clamp(pct, 0, 1)
-            _G.FlashSpeed = math.floor(pct * 100)
+            _G.FlashSpeed = math.floor(pct * 200)
             speedFill.Size = UDim2.new(pct, 0, 1, 0)
-            speedValLbl.Text = tostring(_G.FlashSpeed)
+            speedValLbl.Text = tostring(_G.FlashSpeed) .. "%"
             saveSettings()
         end
 
@@ -3889,21 +3871,6 @@ local function BuildHUB()
             end
         end)
     end
-
-    -- ===== AUTO GRAB NA ABA FLASH TP =====
-    sectionHeader(ScrollFlash, "  AUTO GRAB  ")
-    toggleRow(ScrollFlash, "Auto Grab", _G.AutoGrab, function(v)
-        _G.AutoGrab = v
-        if v then 
-            startAutoGrab()
-            if not autoGrabConn then
-                startAutoGrab()
-            end
-        else 
-            stopAutoGrab() 
-        end
-        saveSettings()
-    end)
 
     -- ===== TAB: BLOCK =====
     sectionHeader(ScrollBlock, "  BLOCK  ")
@@ -4587,16 +4554,6 @@ task.defer(function()
 end)
 
 -- ==========================================
--- INICIA AUTO GRAB SE ESTIVER ATIVADO
--- ==========================================
-if _G.AutoGrab then
-    task.spawn(function()
-        task.wait(1)
-        startAutoGrab()
-    end)
-end
-
--- ==========================================
 -- CLEANUP ON SCRIPT STOP
 -- ==========================================
 local function cleanup()
@@ -4609,7 +4566,6 @@ local function cleanup()
     stopAutoResetTiny()
     stopAutoResetJail()
     StopResetSequence()
-    stopAutoGrab()
     clearBrainrotHighlights()
     clearTpPathVisual()
     clearBaseESP()
