@@ -1,3 +1,6 @@
+-- ==========================================
+-- HIGH HUB - VERSÃO OTIMIZADA
+-- ==========================================
 local Players           = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
 local TweenService      = game:GetService("TweenService")
@@ -20,7 +23,7 @@ local ActiveConnections = {}
 local thisScriptStopped = false
 
 -- ==========================================
--- NOVO RESET (Insta Reset) 
+-- INSTA RESET
 -- ==========================================
 local resetting = false
 local resetCooldown = false
@@ -31,10 +34,9 @@ local stopResetSequence = false
 local cameraLocked = false
 local lockedCameraCFrame = nil
 
--- Configurações do Reset
 local RESET_CONFIG = {
-    FLING_TIME = 0.15,
-    FLING_POWER = 55550,
+    FLING_TIME = 0.35,
+    FLING_POWER = 50000,
     USE_VOID = true,
     VOID_TIME = 0.5,
     TIMEOUT = 5,
@@ -71,7 +73,6 @@ local function insta_reset()
     local hrp = hum.RootPart or char:FindFirstChild("HumanoidRootPart")
     local cam = workspace.CurrentCamera
     
-    -- Trava a câmera durante o reset
     local frozen = cam.CFrame
     local old_type = cam.CameraType
     cameraLocked = true
@@ -87,15 +88,10 @@ local function insta_reset()
             end)
         end)
         
-        -- Esconde o personagem localmente
-        local added
         pcall(function()
             for _, obj in ipairs(char:GetDescendants()) do 
                 pcall(hide_locally, obj) 
             end
-            added = char.DescendantAdded:Connect(function(obj) 
-                pcall(hide_locally, obj) 
-            end)
         end)
         
         local new_char
@@ -103,7 +99,6 @@ local function insta_reset()
             new_char = c 
         end)
         
-        -- Função para destravar o personagem
         local function unlock()
             pcall(function() hum.PlatformStand = false end)
             pcall(function() hum.Sit = false end)
@@ -112,7 +107,6 @@ local function insta_reset()
         end
         unlock()
         
-        -- Remove colisões e ancora partes
         for _, obj in ipairs(char:GetDescendants()) do
             if obj:IsA("BasePart") then
                 pcall(function() 
@@ -132,7 +126,6 @@ local function insta_reset()
             return nil
         end
         
-        -- FASE 1: Fling para cima
         local fling_until = os.clock() + RESET_CONFIG.FLING_TIME
         while not new_char and os.clock() < fling_until and hum.Parent do
             unlock()
@@ -148,7 +141,6 @@ local function insta_reset()
             RunService.Heartbeat:Wait()
         end
         
-        -- FASE 2: Void se necessário
         if RESET_CONFIG.USE_VOID and not new_char then
             local floor = -500
             pcall(function() floor = workspace.FallenPartsDestroyHeight end)
@@ -164,7 +156,6 @@ local function insta_reset()
             end
         end
         
-        -- FASE 3: Forçar morte
         while not new_char and os.clock() - started < RESET_CONFIG.TIMEOUT do
             if hum.Parent then
                 pcall(function() 
@@ -178,18 +169,13 @@ local function insta_reset()
             task.wait(0.05)
         end
         
-        -- Limpeza
         pcall(function() 
             if respawned then respawned:Disconnect() end 
         end)
-        if added then 
-            pcall(function() added:Disconnect() end) 
-        end
         pcall(function() 
             RunService:UnbindFromRenderStep(RESET_CONFIG.CAM_BIND) 
         end)
         
-        -- Restaura câmera
         cameraLocked = false
         pcall(function()
             cam.CameraType = old_type == Enum.CameraType.Scriptable and Enum.CameraType.Custom or old_type
@@ -236,22 +222,11 @@ LocalPlayer.CharacterAdded:Connect(function()
     end)
 end)
 
--- Mantém a câmera travada durante o reset
-task.spawn(function()
-    local camera = workspace.CurrentCamera
-    while not thisScriptStopped do
-        task.wait(0.016)
-        if cameraLocked and lockedCameraCFrame and camera then
-            camera.CFrame = lockedCameraCFrame
-        end
-    end
-end)
-
 -- ==========================================
--- PING LAGGER (KAY VERSION - SUBSTITUINDO A HIGH)
+-- PING LAGGER (KAY VERSION)
 -- ==========================================
 _G.LaggerOnFlash = _G.LaggerOnFlash or false
-_G.LaggerPower   = _G.LaggerPower or 50   -- 0-100
+_G.LaggerPower   = _G.LaggerPower or 50
 
 local laggerConn = nil
 local laggerActive = false
@@ -312,147 +287,6 @@ local SlotsConfig = {
     [26] = { Positions = { Vector3.new(-348.2407,-7.5033,74.3719), Vector3.new(-324.6721,-7.5033,47.2033) }, CamOffset = Vector3.new(-326.6859,-10.0057,51.9385)-Vector3.new(-324.6721,-7.5033,47.2033), CamAngles = {0.698024,-0.314979,0.254268}, NeedJump = true },
     [27] = { Positions = { Vector3.new(-348.2407,-7.5033,74.3719), Vector3.new(-320.4196,-7.5033,44.1) }, CamOffset = Vector3.new(-322.9213,-10.0122,49.5157)-Vector3.new(-320.4196,-7.5033,44.1), CamAngles = {0.876985,-0.422603,0.397417} },
 }
-
--- ==========================================
--- AUTO BALLOON
--- ==========================================
-local BalloonState = {
-    Active = {},
-    Auto = false
-}
-
-local function hasBrainrot(targetPlayer)
-    if not targetPlayer.Character then return false end
-    local root = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return false end
-    
-    local playerNames = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        playerNames[p.Name] = true
-    end
-    
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("Model") and not playerNames[v.Name] and not v:IsDescendantOf(targetPlayer.Character) then
-            local rp = v:FindFirstChild("RootPart") or v:FindFirstChild("FakeRootPart") or v.PrimaryPart
-            if rp and rp:IsA("BasePart") then
-                if (rp.Position - root.Position).Magnitude < 8 then
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
-
-local function isInAnyZone(position)
-    local MultiZones = {
-        {Shape = 'Line', Center = Vector3.new(-345.35, -6.55, 39.19), Size = 5, Rotation = 0},
-        {Shape = 'Line', Center = Vector3.new(-350.53, -6.55, 38.67), Size = 20, Rotation = 0},
-        {Shape = 'Line', Center = Vector3.new(-364.01, -6.55, 38.94), Size = 20, Rotation = 0},
-        {Shape = 'Line', Center = Vector3.new(-337.34, -6.55, 39.18), Size = 20, Rotation = 0},
-        {Shape = 'Square', Center = Vector3.new(-365.29, -6.95, -10.40), Size = 20, Rotation = 0},
-        {Shape = 'Square', Center = Vector3.new(-354.68, -6.95, 6.22), Size = 20, Rotation = 0},
-        {Shape = 'Square', Center = Vector3.new(-343.15, -6.53, -13.20), Size = 20, Rotation = 0},
-        {Shape = 'Square', Center = Vector3.new(-344.93, -6.95, 25.73), Size = 20, Rotation = 0},
-        {Shape = 'Square', Center = Vector3.new(-343.76, -6.95, -10.27), Size = 20, Rotation = 0},
-        {Shape = 'Square', Center = Vector3.new(-354.42, -6.95, 6.51), Size = 25, Rotation = 0},
-        {Shape = 'Square', Center = Vector3.new(-340.48, -5.32, 28.10), Size = 25, Rotation = 0},
-        {Shape = 'Square', Center = Vector3.new(-361.10, -6.95, 29.42), Size = 25, Rotation = 0},
-        {Shape = 'Line', Center = Vector3.new(-354.83, 27.19, 31.22), Size = 20, Rotation = 0},
-    }
-    for _, zone in ipairs(MultiZones) do
-        local half = zone.Size / 2
-        local dx = math.abs(position.X - zone.Center.X)
-        local dz = math.abs(position.Z - zone.Center.Z)
-        if zone.Shape == 'Line' then
-            if dx <= half and dz <= 1.5 then return true end
-        elseif zone.Shape == 'Square' then
-            if dx <= half and dz <= half then return true end
-        end
-    end
-    return false
-end
-
-local function findAdminPanel()
-    return PlayerGui:FindFirstChild("AdminPanel")
-end
-
-local function findPlayerButton(targetPlayer)
-    local adminPanel = findAdminPanel()
-    if not adminPanel then return nil end
-    
-    for _, desc in pairs(adminPanel:GetDescendants()) do
-        if desc:IsA("TextButton") or desc:IsA("ImageButton") then
-            local t = ""
-            if desc:IsA("TextButton") then
-                t = desc.Text
-            else
-                local lbl = desc:FindFirstChildWhichIsA("TextLabel", true)
-                if lbl then t = lbl.Text end
-            end
-            if t == targetPlayer.DisplayName or string.find(t, targetPlayer.DisplayName) or t == targetPlayer.Name or string.find(t, targetPlayer.Name) then
-                return desc
-            end
-        end
-    end
-    return nil
-end
-
-local function getCommandButtons()
-    local btns = {}
-    local adminPanel = findAdminPanel()
-    if not adminPanel then return btns end
-    
-    for _, desc in pairs(adminPanel:GetDescendants()) do
-        if desc:IsA("TextButton") or desc:IsA("ImageButton") then
-            local t = ""
-            if desc:IsA("TextButton") then
-                t = desc.Text
-            else
-                local lbl = desc:FindFirstChildWhichIsA("TextLabel", true)
-                if lbl then t = lbl.Text end
-            end
-            if t and t ~= "" and (t:match("^:") or t:match("^;")) then
-                table.insert(btns, {button = desc, name = t})
-            end
-        end
-    end
-    return btns
-end
-
-local function clickButton(button)
-    pcall(function() button.MouseButton1Click:Fire() end)
-    pcall(function() button.Activated:Fire() end)
-    pcall(function()
-        if getconnections then
-            for _, cx in pairs(getconnections(button.MouseButton1Click)) do cx:Fire() end
-            for _, cx in pairs(getconnections(button.Activated)) do cx:Fire() end
-        end
-    end)
-end
-
-local function isExactCommand(buttonName, expectedCmdName)
-    local bName = string.lower(string.match(buttonName, "^%s*(.-)%s*$") or buttonName)
-    local cmdName = string.lower(expectedCmdName)
-    if bName == cmdName or bName == ":"..cmdName or bName == ";"..cmdName then return true end
-    if string.match(bName, "^[:;]?"..cmdName.."$") or string.match(bName, "^[:;]?"..cmdName.."%s") then return true end
-    return false
-end
-
-local function triggerBalloonOnTarget(targetPlayer)
-    if not targetPlayer or not targetPlayer.Parent then return end
-    if not findAdminPanel() then return end
-    
-    for _, cBtn in ipairs(getCommandButtons()) do
-        if isExactCommand(cBtn.name, "balloon") then
-            clickButton(cBtn.button)
-            task.wait(0.02)
-            local pBtn = findPlayerButton(targetPlayer)
-            if pBtn then clickButton(pBtn) end
-            break
-        end
-    end
-end
 
 -- ==========================================
 -- QUICK PICKUP (OTIMIZADO)
@@ -524,7 +358,7 @@ local QuickPickup = (function()
                     si = si + 1; stack[si] = d
                 end
                 visited = visited + 1
-                if visited % 20 == 0 then task.wait() end
+                if visited % 50 == 0 then task.wait() end
             end
             scanRunning = false
         end)
@@ -548,7 +382,7 @@ local QuickPickup = (function()
 end)()
 
 -- ==========================================
--- TINY RESET (OTIMIZADO)
+-- TINY RESET
 -- ==========================================
 local TinyState = {
     Enabled = false,
@@ -609,7 +443,7 @@ local function stopAutoResetTiny()
 end
 
 -- ==========================================
--- JAIL RESET (OTIMIZADO)
+-- JAIL RESET
 -- ==========================================
 local JailState = {
     Enabled = false,
@@ -685,230 +519,6 @@ end
 
 local settingsGetters = {}
 
--- ============================================================
--- AIMBOT (OTIMIZADO)
--- ============================================================
-do
-    if _G.HighAimbotSetupDone then return end
-    _G.HighAimbotSetupDone = true
-
-    local aimbotEnabled = false
-    local aimRemoteIndex = {}
-    local aimRemoteObjects = {}
-    local aimLastShot = 0
-    local aimConnections = {}
-    local aimCurrentCharacter = nil
-
-    local AIM_VALID_TOOLS  = {"Web Slinger", "Laser Cape", "Paintball Gun"}
-    local AIM_TARGET_PARTS = {"HumanoidRootPart", "UpperTorso", "Torso", "Head"}
-    local AIM_MAX_DISTANCE = 800
-    local AIM_LEAD_TIME    = 0.18
-
-    local function resolveUseItemRemote()
-        local cached = _G._FH_UseItemRemote
-        if typeof(cached) == "Instance" and cached.Parent then return cached end
-        local nm = _G._FH_NET
-        if nm and typeof(nm.UseItem) == "Instance" and nm.UseItem.Parent then
-            _G._FH_UseItemRemote = nm.UseItem; return nm.UseItem
-        end
-        local _getconnections = getconnections
-        local _getconstants   = (debug and debug.getconstants) or getconstants
-        if type(_getconnections) ~= "function" or type(_getconstants) ~= "function" then return nil end
-        local ok, netFolder = pcall(function()
-            return ReplicatedStorage:WaitForChild("Packages", 15):WaitForChild("Net", 15)
-        end)
-        if not ok or not netFolder then return nil end
-        local found
-        for _, r in ipairs(netFolder:GetChildren()) do
-            if r:IsA("RemoteEvent") and not found then
-                local okc, conns = pcall(_getconnections, r.OnClientEvent)
-                if okc and conns then
-                    for _, c in ipairs(conns) do
-                        if type(c.Function) == "function" then
-                            local okk, consts = pcall(_getconstants, c.Function)
-                            if okk and consts then
-                                for _, k in ipairs(consts) do
-                                    if k == "PaintballHitted" then found = r; break end
-                                end
-                            end
-                        end
-                        if found then break end
-                    end
-                end
-            end
-            if found then break end
-        end
-        if found then _G._FH_UseItemRemote = found end
-        return found
-    end
-
-    local function initRemotes()
-        local ok, children = pcall(function()
-            return ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Net"):GetChildren()
-        end)
-        if not ok or not children then return end
-        aimRemoteIndex = {}
-        aimRemoteObjects = {}
-        for i, obj in ipairs(children) do
-            if obj:IsA("RemoteEvent") then
-                local nextObj = children[i + 1]
-                if nextObj then
-                    aimRemoteIndex[obj.Name] = i + 1
-                    aimRemoteObjects[i + 1] = nextObj
-                end
-            end
-        end
-    end
-
-    local function fireRemote(name, ...)
-        if name == "RE/UseItem" or name == "UseItem" then
-            local r = resolveUseItemRemote()
-            if r then
-                r:FireServer(...)
-                return true
-            end
-        end
-        local index = aimRemoteIndex[name]
-        if index and aimRemoteObjects[index] then
-            aimRemoteObjects[index]:FireServer(...)
-            return true
-        end
-        return false
-    end
-
-    local function getTool()
-        local c = LocalPlayer.Character
-        return c and c:FindFirstChildOfClass("Tool")
-    end
-
-    local function hasValidTool()
-        local tool = getTool()
-        if not tool then return false end
-        for _, name in pairs(AIM_VALID_TOOLS) do
-            if tool.Name == name then return true end
-        end
-        return false
-    end
-
-    local function isAlive(char)
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        return hum and hum.Health > 0
-    end
-
-    local function getNearestPlayer()
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return nil end
-        local closest, bestDist = nil, AIM_MAX_DISTANCE
-        for _, plr in pairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer then
-                local c = plr.Character
-                local rp = c and c:FindFirstChild("HumanoidRootPart")
-                if rp and isAlive(c) then
-                    local d = (rp.Position - hrp.Position).Magnitude
-                    if d < bestDist then
-                        bestDist = d
-                        closest = plr
-                    end
-                end
-            end
-        end
-        return closest
-    end
-
-    local function getBestPart(character)
-        for _, name in pairs(AIM_TARGET_PARTS) do
-            local p = character:FindFirstChild(name)
-            if p then return p end
-        end
-        return nil
-    end
-
-    local function shoot()
-        if not hasValidTool() then return false end
-        local target = getNearestPlayer()
-        if not target then return false end
-        local char = target.Character
-        if not char or not isAlive(char) then return false end
-        local part = getBestPart(char)
-        if not part then return false end
-        local vel = Vector3.zero
-        pcall(function()
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if hrp then vel = hrp.Velocity or Vector3.zero end
-        end)
-        local targetPos = part.Position + Vector3.new(0, 0.5, 0) + vel * AIM_LEAD_TIME
-        if not (aimRemoteIndex["RE/UseItem"] or aimRemoteIndex["UseItem"]) then
-            initRemotes()
-        end
-        local ok = fireRemote("RE/UseItem", targetPos, part)
-        if not ok then
-            initRemotes()
-            ok = fireRemote("RE/UseItem", targetPos, part)
-        end
-        return ok
-    end
-
-    local function tryShoot()
-        local now = tick()
-        if now - aimLastShot < 0.04 then return end
-        aimLastShot = now
-        shoot()
-    end
-
-    local function hookTool(tool)
-        if not tool then return end
-        local conn = tool.Activated:Connect(tryShoot)
-        table.insert(aimConnections, conn)
-    end
-
-    local function setupCharacter(char)
-        aimCurrentCharacter = char
-        local tool = char:FindFirstChildOfClass("Tool")
-        if tool then hookTool(tool) end
-        local conn = char.ChildAdded:Connect(function(child)
-            if child:IsA("Tool") then hookTool(child) end
-        end)
-        table.insert(aimConnections, conn)
-    end
-
-    local function startAimbot()
-        initRemotes()
-        local inputConn = UserInputService.InputBegan:Connect(function(input, gp)
-            if gp then return end
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or
-               input.UserInputType == Enum.UserInputType.Touch then
-                tryShoot()
-            end
-        end)
-        table.insert(aimConnections, inputConn)
-
-        if LocalPlayer.Character then
-            setupCharacter(LocalPlayer.Character)
-        end
-        local charConn = LocalPlayer.CharacterAdded:Connect(setupCharacter)
-        table.insert(aimConnections, charConn)
-    end
-
-    local function stopAimbot()
-        for _, c in ipairs(aimConnections) do pcall(c.Disconnect, c) end
-        aimConnections = {}
-        aimCurrentCharacter = nil
-    end
-
-    function _G.ToggleAimbot(state)
-        aimbotEnabled = state
-        if state then startAimbot() else stopAimbot() end
-        _G.AimbotEnabled = state
-        if type(saveSettings) == "function" then pcall(saveSettings) end
-    end
-
-    if _G.AimbotEnabled == nil then _G.AimbotEnabled = false end
-    if _G.AimbotEnabled then
-        task.defer(function() _G.ToggleAimbot(true) end)
-    end
-end
-
 local function saveSettings()
     pcall(function()
         local out = {}
@@ -919,9 +529,9 @@ local function saveSettings()
     end)
 end
 
--- ============================================================
+-- ==========================================
 -- UI LAYOUT SAVE/RESTORE
--- ============================================================
+-- ==========================================
 local function loadUILayout()
     local ok, data = pcall(function()
         return game:GetService("HttpService"):JSONDecode(readfile(UI_LAYOUT_FILE))
@@ -988,12 +598,6 @@ local savedSettings = loadSettings()
 if savedSettings.AutoResetOnBalloon ~= nil then _G.AutoResetOnBalloon = savedSettings.AutoResetOnBalloon
 elseif _G.AutoResetOnBalloon == nil then _G.AutoResetOnBalloon = true end
 
-if savedSettings.AutoFlashTP ~= nil then _G.AutoFlashTP = savedSettings.AutoFlashTP
-elseif _G.AutoFlashTP == nil then _G.AutoFlashTP = false end
-
-if savedSettings.AutoFlashLowTimer ~= nil then _G.AutoFlashLowTimer = savedSettings.AutoFlashLowTimer
-elseif _G.AutoFlashLowTimer == nil then _G.AutoFlashLowTimer = false end
-
 if savedSettings.AutoGiant ~= nil then _G.AutoGiant = savedSettings.AutoGiant
 elseif _G.AutoGiant == nil then _G.AutoGiant = false end
 
@@ -1017,9 +621,6 @@ elseif _G.FlashSpeed == nil then _G.FlashSpeed = 100 end
 
 if savedSettings.AutoBalloon ~= nil then _G.AutoBalloon = savedSettings.AutoBalloon
 elseif _G.AutoBalloon == nil then _G.AutoBalloon = false end
-
-if savedSettings.Aimbot ~= nil then _G.AimbotEnabled = savedSettings.Aimbot
-elseif _G.AimbotEnabled == nil then _G.AimbotEnabled = false end
 
 if savedSettings.AutoSelectBest ~= nil then _G.AutoSelectBest = savedSettings.AutoSelectBest
 elseif _G.AutoSelectBest == nil then _G.AutoSelectBest = false end
@@ -1046,9 +647,6 @@ elseif _G.QuickAP == nil then _G.QuickAP = false end
 if savedSettings.AutoReturnBase ~= nil then _G.AutoReturnBase = savedSettings.AutoReturnBase
 elseif _G.AutoReturnBase == nil then _G.AutoReturnBase = false end
 
-if savedSettings.BrainrotHighlight ~= nil then _G.BrainrotHighlight = savedSettings.BrainrotHighlight
-elseif _G.BrainrotHighlight == nil then _G.BrainrotHighlight = true end
-
 if savedSettings.TpPathVisual ~= nil then _G.TpPathVisual = savedSettings.TpPathVisual
 elseif _G.TpPathVisual == nil then _G.TpPathVisual = true end
 
@@ -1074,6 +672,22 @@ QuickPickup.set(_G.QuickPickup)
 if savedSettings.AntiRagdoll ~= nil then _G.AntiRagdoll = savedSettings.AntiRagdoll
 elseif _G.AntiRagdoll == nil then _G.AntiRagdoll = false end
 
+-- ==========================================
+-- HEADLESS VISUAL SETTINGS
+-- ==========================================
+_G.HeadlessVisual = _G.HeadlessVisual or false
+if savedSettings.HeadlessVisual ~= nil then 
+    _G.HeadlessVisual = savedSettings.HeadlessVisual
+end
+
+-- ==========================================
+-- KORBLOX VISUAL SETTINGS
+-- ==========================================
+_G.KorbloxVisual = _G.KorbloxVisual or false
+if savedSettings.KorbloxVisual ~= nil then 
+    _G.KorbloxVisual = savedSettings.KorbloxVisual
+end
+
 local WalkItemOptions = { "Flying Carpet", "Cupid's Wings", "Witch's Broom", "Waverider", "Santa's Sleigh" }
 if savedSettings.WalkItem ~= nil and table.find(WalkItemOptions, savedSettings.WalkItem) then
     _G.WalkItem = savedSettings.WalkItem
@@ -1094,12 +708,9 @@ local selectedPrompt    = nil
 local selectedSlotNumber= nil
 
 local player = LocalPlayer
-local maxVelocity  = 40
-local clampVelocity= 25
-local maxClamp     = 15
 
 -- ==========================================
--- ANTI RAGDOLL (OTIMIZADO)
+-- ANTI RAGDOLL
 -- ==========================================
 local AntiRagdollConns = {}
 local antiRagdollEnabled = _G.AntiRagdoll or false
@@ -1318,30 +929,6 @@ local function blockPlayer(plr)
     end)
 end
 
-local function blockAllPlayers()
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            blockPlayer(p)
-            task.wait(1)
-        end
-    end
-end
-
-local function waitForStealPrompt()
-    for _, v in ipairs(CoreGui:GetDescendants()) do
-        if v:IsA("TextLabel") and v.Text and string.find(v.Text, "Steal") then return true end
-    end
-    local found = false
-    local connection
-    connection = CoreGui.DescendantAdded:Connect(function(v)
-        if v:IsA("TextLabel") and v.Text and string.find(v.Text, "Steal") then found = true end
-    end)
-    table.insert(ActiveConnections, connection)
-    while not found and not thisScriptStopped do task.wait(0.05) end
-    if connection then pcall(function() connection:Disconnect() end) end
-    return true
-end
-
 local charAddedConn = LocalPlayer.CharacterAdded:Connect(function(newChar)
     if currentMovement then pcall(function() currentMovement:Disconnect() end) currentMovement = nil end
     Character = newChar
@@ -1356,19 +943,11 @@ local charAddedConn = LocalPlayer.CharacterAdded:Connect(function(newChar)
         local oldAttachment = Root:FindFirstChild("Attachment")
         if oldAttachment then oldAttachment:Destroy() end
     end
-    
-    if _G.AutoFlashTP and _G.AutoResetOnBalloon and selectedPrompt and selectedSlotNumber then
-        task.delay(0.5, function()
-            if not thisScriptStopped and selectedPrompt and selectedSlotNumber then
-                startTripToPetSlot(selectedPrompt, selectedSlotNumber)
-            end
-        end)
-    end
 end)
 table.insert(ActiveConnections, charAddedConn)
 
 -- ==========================================
--- FUNÇÕES UTILITÁRIAS DO HUGO
+-- FUNÇÕES UTILITÁRIAS
 -- ==========================================
 local function findTool(name)
     if not Character then return nil end
@@ -1422,7 +1001,7 @@ local STOP_DIST = 5
 local SLOW_DIST = 20
 
 -- ==========================================
--- AUTO RETURN TO BASE (OTIMIZADO)
+-- AUTO RETURN TO BASE
 -- ==========================================
 local BASE_TARGET    = Vector3.new(-350.8919, -6.6011, 108.6947)
 local BASE_SPEED     = 25
@@ -1558,78 +1137,192 @@ local function doReset()
 end
 
 -- ==========================================
--- AUTO BALLOON HEARTBEAT (OTIMIZADO)
+-- AUTO BALLOON (KAY VERSION - OTIMIZADO)
 -- ==========================================
-local lastBalloonCheck = 0
-local balloonCheckInterval = 0.15
+local KayBalloon = {
+    Enabled = false,
+    Active = {},
+    WallActive = {},
+    Cooldown = {},
+    CooldownTime = 3,
+}
 
-RunService.Heartbeat:Connect(function()
-    if not _G.AutoBalloon then return end
+-- Zonas de detecção (paredes)
+local WALL_CENTER_Y = 1000
+local WALL_H = 2020
+
+local BALLOON_WALLS = {
+    {pos=Vector3.new(-337.8, WALL_CENTER_Y, 35.5), rot=0,   w=8, h=WALL_H},
+    {pos=Vector3.new(-328.9, WALL_CENTER_Y, 37.1), rot=0,   w=8, h=WALL_H},
+    {pos=Vector3.new(-345.3, WALL_CENTER_Y, 37.1), rot=0,   w=8, h=WALL_H},
+    {pos=Vector3.new(-353.6, WALL_CENTER_Y, 37.0), rot=0,   w=8, h=WALL_H},
+    {pos=Vector3.new(-360.2, WALL_CENTER_Y, 34.2), rot=315, w=8, h=WALL_H},
+    {pos=Vector3.new(-362.8, WALL_CENTER_Y, 27.2), rot=270, w=8, h=WALL_H},
+    {pos=Vector3.new(-362.4, WALL_CENTER_Y, 19.3), rot=90,  w=8, h=WALL_H},
+    {pos=Vector3.new(-361.7, WALL_CENTER_Y, 11.5), rot=90,  w=8, h=WALL_H},
+    {pos=Vector3.new(-361.8, WALL_CENTER_Y,  3.7), rot=90,  w=8, h=WALL_H},
+    {pos=Vector3.new(-361.8, WALL_CENTER_Y, -4.5), rot=90,  w=8, h=WALL_H},
+    {pos=Vector3.new(-360.9, WALL_CENTER_Y,-12.3), rot=75,  w=8, h=WALL_H},
+    {pos=Vector3.new(-358.2, WALL_CENTER_Y,-18.9), rot=60,  w=8, h=WALL_H},
+    {pos=Vector3.new(-352.5, WALL_CENTER_Y,-23.1), rot=15,  w=8, h=WALL_H},
+    {pos=Vector3.new(-344.9, WALL_CENTER_Y,-23.5), rot=345, w=8, h=WALL_H},
+    {pos=Vector3.new(-337.8, WALL_CENTER_Y,-20.2), rot=315, w=8, h=WALL_H},
+}
+
+local WALL_PLANE_DEPTH = 2.5
+local WALL_SIDE_MARGIN = 1.5
+
+local _wallCache = {}
+for _, wall in ipairs(BALLOON_WALLS) do
+    local rad = math.rad(wall.rot)
+    table.insert(_wallCache, {
+        px = wall.pos.X, py = wall.pos.Y, pz = wall.pos.Z,
+        nx =  math.cos(rad), nz = -math.sin(rad),
+        ax =  math.sin(rad), az =  math.cos(rad),
+        halfW = wall.w / 2,
+        halfH = wall.h / 2,
+    })
+end
+
+local function isNearAnyWall(pos)
+    for _, w in ipairs(_wallCache) do
+        local dx    = pos.X - w.px
+        local dz    = pos.Z - w.pz
+        local depth = dx * w.nx + dz * w.nz
+        if math.abs(depth) > WALL_PLANE_DEPTH then continue end
+        local side  = dx * w.ax + dz * w.az
+        if math.abs(side) > w.halfW + WALL_SIDE_MARGIN then continue end
+        return true
+    end
+    return false
+end
+
+local function getAdminTextBox()
+    local AdminGui = PlayerGui:FindFirstChild("AdminPanel")
+    if not AdminGui then return nil end
+    local panel = AdminGui:FindFirstChild("AdminPanel")
+    if not panel then return nil end
+    local commandBox = panel:FindFirstChild("CommandBox")
+    if not commandBox then return nil end
+    return commandBox:FindFirstChild("TextBox")
+end
+
+local function triggerBalloonOnTarget(targetPlayer)
+    if not targetPlayer or not targetPlayer.Parent then return end
+    local TextBox = getAdminTextBox()
+    if not TextBox then return end
+
+    local fullCmd = ";balloon " .. targetPlayer.Name
+    local originalVisible = TextBox.Visible
+    TextBox.Visible = false
+    TextBox.Text = fullCmd
+    task.wait(0.05)
+
+    local executed = false
+
+    if not executed and firesignal then
+        pcall(function() firesignal(TextBox.FocusLost, true); executed = true end)
+    end
+    if not executed and getconnections then
+        pcall(function()
+            for _, conn in pairs(getconnections(TextBox.FocusLost)) do conn:Fire(true) end
+            executed = true
+        end)
+    end
+    if not executed then
+        pcall(function()
+            if firesignal then
+                firesignal(TextBox.KeyDown, Enum.KeyCode.Return)
+            elseif getconnections then
+                for _, conn in pairs(getconnections(TextBox.KeyDown)) do conn:Fire(Enum.KeyCode.Return) end
+            end
+            executed = true
+        end)
+    end
+    if not executed then
+        pcall(function()
+            TextBox:CaptureFocus()
+            task.wait(0.0001)
+            TextBox:ReleaseFocus(true)
+            executed = true
+        end)
+    end
+
+    task.wait(0.05)
+    TextBox.Text = ""
+    TextBox.Visible = originalVisible
+end
+
+-- Heartbeat para Auto Balloon (executado a cada 0.2s)
+local balloonHeartbeatConn
+balloonHeartbeatConn = RunService.Heartbeat:Connect(function()
+    if not KayBalloon.Enabled then return end
     local now = tick()
-    if now - lastBalloonCheck < balloonCheckInterval then return end
-    lastBalloonCheck = now
 
     for _, p in pairs(Players:GetPlayers()) do
         if p == LocalPlayer then continue end
+        local uid = p.UserId
+        
+        -- Verifica se está sendo roubado (StealingPlayer)
+        local isStealing = p:GetAttribute("StealingPlayer") == true
+        if not isStealing then
+            KayBalloon.WallActive[uid] = nil
+            KayBalloon.Active[uid] = nil
+            continue
+        end
+
+        KayBalloon.WallActive[uid] = true
+
         local character = p.Character
         if not character then continue end
         local rootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
         if not rootPart then continue end
 
-        local targetKey = p.UserId
-        local inZone = isInAnyZone(rootPart.Position)
-        local withBrainrot = hasBrainrot(p)
+        local humanoid  = character:FindFirstChildOfClass("Humanoid")
+        local hipHeight = humanoid and humanoid.HipHeight or 2
+        local rootPos   = rootPart.Position
+        local feetPos   = rootPos - Vector3.new(0, hipHeight + 1, 0)
 
-        if inZone and withBrainrot and not BalloonState.Active[targetKey] then
-            BalloonState.Active[targetKey] = true
-            triggerBalloonOnTarget(p)
-        elseif (not inZone or not withBrainrot) and BalloonState.Active[targetKey] then
-            BalloonState.Active[targetKey] = nil
+        local backpack = p:FindFirstChildOfClass("Backpack")
+        local isGiant  = backpack and backpack:FindFirstChild("Giant Potion") ~= nil
+
+        local inZone = isNearAnyWall(rootPos) or isNearAnyWall(feetPos)
+        
+        -- Se for Giant, verifica também posição simulada
+        if not inZone and isGiant then
+            for _, w in ipairs(_wallCache) do
+                local dx  = w.px - rootPos.X
+                local dz  = w.pz - rootPos.Z
+                local dot = dx * w.nx + dz * w.nz
+                if math.abs(dot) > 30 then continue end
+                local simPos = rootPos + Vector3.new(w.nx * 15, 0, w.nz * 15)
+                if isNearAnyWall(simPos) then inZone = true; break end
+            end
         end
+
+        if not inZone then
+            KayBalloon.Active[uid] = nil
+            continue
+        end
+
+        if KayBalloon.Active[uid] then continue end
+        if now - (KayBalloon.Cooldown[uid] or 0) < KayBalloon.CooldownTime then continue end
+
+        KayBalloon.Active[uid] = true
+        KayBalloon.Cooldown[uid] = now
+
+        task.spawn(function() triggerBalloonOnTarget(p) end)
     end
 end)
+table.insert(ActiveConnections, balloonHeartbeatConn)
 
 Players.PlayerRemoving:Connect(function(p)
-    BalloonState.Active[p.UserId] = nil
+    KayBalloon.Active[p.UserId] = nil
+    KayBalloon.WallActive[p.UserId] = nil
 end)
-
-local _resetWasByBalloon = false
-local balloonConnection
-balloonConnection = LocalPlayer:GetAttributeChangedSignal("Balloon"):Connect(function()
-    if thisScriptStopped then pcall(function() balloonConnection:Disconnect() end) return end
-    if _G.AutoResetOnBalloon == true and LocalPlayer:GetAttribute("Balloon") == true then
-        _resetWasByBalloon = true
-        task.spawn(function() doReset() end)
-    end
-end)
-table.insert(ActiveConnections, balloonConnection)
-
-for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
-    if obj:IsA("RemoteEvent") then
-        local conn = obj.OnClientEvent:Connect(function(...)
-            if not _G.AutoResetOnBalloon then return end
-            for _, arg in ipairs({...}) do
-                if type(arg) == "string" and arg:lower():find("jump higher") then
-                    task.spawn(function() doReset() end)
-                end
-            end
-        end)
-        table.insert(ActiveConnections, conn)
-    end
-end
-
-local PREBLOCK_DIST_BY_SLOT = {
-    [1]  = 1.6, [2]  = 1.6, [3]  = 1.6, [4]  = 1.6, [5]  = 1.6,
-    [6]  = 1.6, [7]  = 1.6, [8]  = 1.6, [9]  = 1.6,
-    [11] = 7.8, [12] = 7.8, [13] = 7.8, [14] = 7.8, [15] = 7.8, [16] = 7.8,
-    [19] = 7.8, [20] = 7.8, [21] = 7.8, [22] = 7.8, [23] = 7.8,
-    [24] = 6.6, [25] = 6.6, [26] = 6.6, [27] = 6.6,
-}
-
-local clearTpPathVisual
 
 -- ==========================================
--- START TRIP TO PET SLOT (FLASH TP DO HUGO COM MELHORIAS)
+-- START TRIP TO PET SLOT (FLASH TP OTIMIZADO)
 -- ==========================================
 local function startTripToPetSlot(prompt, slotNumber)
     local config = SlotsConfig[slotNumber] or SlotsConfig[1]
@@ -1640,25 +1333,19 @@ local function startTripToPetSlot(prompt, slotNumber)
     if not Root or not Humanoid then return end
     autoStealEnabled = true
     
-    -- ==========================================
-    -- FLASH SPEED TRIGGER (0% a 200%)
-    -- ==========================================
     local flashSpeed = _G.FlashSpeed or 100
-    -- Converte 0-200% para um multiplicador de velocidade
-    -- 0% = lesma (muito lento), 100% = normal, 200% = muito rápido
     local speedMultiplier
     if flashSpeed <= 0 then
-        speedMultiplier = 0.05  -- quase parado (lesma)
+        speedMultiplier = 0.05
     elseif flashSpeed <= 1 then
-        speedMultiplier = 0.05  -- 1% também é lesma
+        speedMultiplier = 0.05
     elseif flashSpeed <= 10 then
-        speedMultiplier = flashSpeed / 100 * 0.3  -- muito lento
+        speedMultiplier = flashSpeed / 100 * 0.3
     else
-        speedMultiplier = flashSpeed / 100  -- 1.0 em 100%, 2.0 em 200%
+        speedMultiplier = flashSpeed / 100
     end
     
     local Speed = 200 * speedMultiplier
-    -- Garante que Speed nunca seja menor que 5 (para não travar completamente)
     Speed = math.max(Speed, 5)
     
     local grabStartDistance = 60
@@ -1677,9 +1364,6 @@ local function startTripToPetSlot(prompt, slotNumber)
     local currentPosIndex = 1
     local intermediatePauseActive = false
     
-    -- ==========================================
-    -- UNWALK ANIM (desativa animação de caminhada durante o flash)
-    -- ==========================================
     local savedWalkSpeed = Humanoid.WalkSpeed
     local savedJumpPower = Humanoid.JumpPower
     Humanoid.WalkSpeed = 0
@@ -1689,11 +1373,9 @@ local function startTripToPetSlot(prompt, slotNumber)
     local animator = Humanoid:FindFirstChildOfClass("Animator")
     local animPlayConn
     if animator then
-        -- Para todas as animações atuais
         for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
             pcall(function() track:Stop(0) end)
         end
-        -- Bloqueia novas animações
         animPlayConn = animator.AnimationPlayed:Connect(function(track)
             pcall(function() track:Stop(0) end)
         end)
@@ -1764,14 +1446,10 @@ local function startTripToPetSlot(prompt, slotNumber)
             end
             task.wait(0.1)
             
-            -- ==========================================
-            -- LAGGER ATIVADO AQUI (KAY VERSION)
-            -- ==========================================
             if _G.LaggerOnFlash then
                 startFlashLagger()
             end
             
-            -- RAGDOLL BYPASS : Giant + Ragdoll
             if _G.RagdollBypass then
                 local giant = findTool("giant potion")
                 if giant then
@@ -1781,28 +1459,31 @@ local function startTripToPetSlot(prompt, slotNumber)
                     task.wait(0.02)
                     Humanoid:UnequipTools()
                 end
-                -- Comando ragdoll via admin
                 task.spawn(function()
-                    local TextBox = _qapTextBox
+                    local TextBox = getAdminTextBox()
                     if TextBox then
                         local fullCmd = ";ragdoll " .. LocalPlayer.Name
+                        local visible = TextBox.Visible
                         TextBox.Visible = false
                         TextBox.Text = fullCmd
                         task.wait(0.05)
                         pcall(function()
-                            for _, conn in pairs(getconnections(TextBox.FocusLost)) do
-                                conn:Fire(true)
+                            if firesignal then
+                                firesignal(TextBox.FocusLost, true)
+                            elseif getconnections then
+                                for _, conn in pairs(getconnections(TextBox.FocusLost)) do
+                                    conn:Fire(true)
+                                end
                             end
                         end)
                         task.wait(0.05)
                         TextBox.Text = ""
-                        TextBox.Visible = true
+                        TextBox.Visible = visible
                     end
                 end)
             end
             Camera.CameraType = Enum.CameraType.Custom
             
-            -- Restaura a animação após o flash
             restoreMovement()
             
             if _G.AutoBlock then
@@ -1812,7 +1493,7 @@ local function startTripToPetSlot(prompt, slotNumber)
                         task.wait(0.13)
                     elseif mode == "fast" then
                         task.wait(0.08)
-                    else -- veryfast
+                    else
                         task.wait(0.04)
                     end
                     local target = getNearestPlayer()
@@ -1828,423 +1509,10 @@ local function startTripToPetSlot(prompt, slotNumber)
 end
 
 local scrollListRef = nil
-local brainrotNameGradients = {}
 
--- ============================================================
--- BRAINROT HIGHLIGHT (OTIMIZADO)
--- ============================================================
-local brainrotHighlights = {}
-local brainrotModelByPrompt = {}
-local brainrotScanRunning = false
-
-local function clearBrainrotHighlights()
-    for key, h in pairs(brainrotHighlights) do
-        pcall(function() h:Destroy() end)
-        brainrotHighlights[key] = nil
-    end
-    brainrotModelByPrompt = {}
-end
-
-local function updateBrainrotHighlights()
-    if not _G.BrainrotHighlight then
-        clearBrainrotHighlights()
-        return
-    end
-    if brainrotScanRunning then return end
-    brainrotScanRunning = true
-    
-    task.spawn(function()
-        local plotsFolder = Workspace:FindFirstChild("Plots")
-        if not plotsFolder then 
-            brainrotScanRunning = false
-            return 
-        end
-
-        local seen = {}
-
-        for _, plot in ipairs(plotsFolder:GetChildren()) do
-            if not isMyPlot(plot) then
-                local podiums = plot:FindFirstChild("AnimalPodiums")
-                if podiums then
-                    for _, podium in ipairs(podiums:GetChildren()) do
-                        local slotNumber = tonumber(podium.Name:match("%d+")) or 1
-                        local key = plot.Name .. "_" .. slotNumber
-                        local base = podium:FindFirstChild("Base") or podium
-                        local spawnPoint = base:FindFirstChild("Spawn")
-                        local attachment = spawnPoint and spawnPoint:FindFirstChild("PromptAttachment")
-                        if attachment then
-                            for _, child in ipairs(attachment:GetChildren()) do
-                                if child:IsA("ProximityPrompt") and isValidStealPrompt(child) then
-                                    seen[key] = true
-                                    if not brainrotHighlights[key] then
-                                        local model = nil
-                                        local spawnPos = spawnPoint.Position
-                                        local bestDist = 5
-                                        local playerNames = {}
-                                        for _, p in pairs(Players:GetPlayers()) do playerNames[p.Name] = true end
-                                        for _, v in ipairs(plot:GetDescendants()) do
-                                            if v:IsA("Model") and not playerNames[v.Name] and not v:IsDescendantOf(podium) then
-                                                local rp = v.PrimaryPart or v:FindFirstChild("RootPart") or v:FindFirstChild("HumanoidRootPart") or v:FindFirstChildWhichIsA("BasePart")
-                                                if rp then
-                                                    local d = (rp.Position - spawnPos).Magnitude
-                                                    if d < bestDist then
-                                                        bestDist = d
-                                                        model = v
-                                                    end
-                                                end
-                                            end
-                                        end
-                                        if model then
-                                            brainrotModelByPrompt[child] = model
-                                            local existing = model:FindFirstChild("_BrainrotHL")
-                                            if existing then existing:Destroy() end
-                                            local h = Instance.new("Highlight")
-                                            h.Name                  = "_BrainrotHL"
-                                            h.Adornee               = model
-                                            h.FillColor             = Color3.fromRGB(255, 120, 180)
-                                            h.OutlineColor          = Color3.fromRGB(255, 60, 140)
-                                            h.FillTransparency      = 0.5
-                                            h.OutlineTransparency   = 0
-                                            h.DepthMode             = Enum.HighlightDepthMode.AlwaysOnTop
-                                            h.Parent                = model
-                                            brainrotHighlights[key] = h
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        for key, h in pairs(brainrotHighlights) do
-            if not seen[key] then
-                pcall(function() h:Destroy() end)
-                brainrotHighlights[key] = nil
-            end
-        end
-        for prompt, _ in pairs(brainrotModelByPrompt) do
-            if not prompt.Parent then
-                brainrotModelByPrompt[prompt] = nil
-            end
-        end
-        brainrotScanRunning = false
-    end)
-end
-
-task.spawn(function()
-    while task.wait(0.5) do
-        if thisScriptStopped then
-            clearBrainrotHighlights()
-            clearTpPathVisual()
-            break
-        end
-        pcall(updateBrainrotHighlights)
-    end
-end)
-
--- ============================================================
--- VISUALIZAÇÃO DO TRAJETO DE TP
--- ============================================================
-local tpPathMarkers   = {}
-local tpTargetHighlight = nil
-local tpVisualPrompt  = nil
-
-clearTpPathVisual = function()
-    for _, m in ipairs(tpPathMarkers) do
-        pcall(function() m:Destroy() end)
-    end
-    tpPathMarkers = {}
-    if tpTargetHighlight then
-        pcall(function() tpTargetHighlight:Destroy() end)
-        tpTargetHighlight = nil
-    end
-    tpVisualPrompt = nil
-end
-
-local function createArrowMarker(position, index)
-    local part = Instance.new("Part")
-    part.Name        = "_TPPathMarker"
-    part.Anchored    = true
-    part.CanCollide  = false
-    part.CanQuery    = false
-    part.CanTouch    = false
-    part.Transparency = 1
-    part.Size        = Vector3.new(0.2, 0.2, 0.2)
-    part.Position    = position + Vector3.new(0, 5, 0)
-    part.Parent      = Workspace
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name             = "_TPPathBillboard"
-    billboard.Size             = UDim2.new(0, 60, 0, 80)
-    billboard.StudsOffset      = Vector3.new(0, 0, 0)
-    billboard.AlwaysOnTop      = true
-    billboard.Parent           = part
-
-    local arrowLabel = Instance.new("TextLabel")
-    arrowLabel.Size               = UDim2.new(1, 0, 0, 40)
-    arrowLabel.Position           = UDim2.new(0, 0, 0, 0)
-    arrowLabel.BackgroundTransparency = 1
-    arrowLabel.Text               = "▼"
-    arrowLabel.TextColor3         = Color3.fromRGB(255, 120, 180)
-    arrowLabel.TextScaled         = true
-    arrowLabel.Font               = Enum.Font.GothamBold
-    arrowLabel.Parent             = billboard
-
-    local numberLabel = Instance.new("TextLabel")
-    numberLabel.Size               = UDim2.new(1, 0, 0, 30)
-    numberLabel.Position           = UDim2.new(0, 0, 0, 38)
-    numberLabel.BackgroundTransparency = 1
-    numberLabel.Text               = tostring(index)
-    numberLabel.TextColor3         = Color3.fromRGB(255, 255, 255)
-    numberLabel.TextStrokeTransparency = 0
-    numberLabel.TextStrokeColor3   = Color3.fromRGB(0, 0, 0)
-    numberLabel.TextScaled         = true
-    numberLabel.Font               = Enum.Font.GothamBold
-    numberLabel.Parent             = billboard
-
-    task.spawn(function()
-        local t = 0
-        while part.Parent do
-            t += task.wait(0.05)
-            if not part.Parent then break end
-            part.Position = position + Vector3.new(0, 5 + math.sin(t * 3) * 0.4, 0)
-        end
-    end)
-
-    return part
-end
-
-local function showTpPathVisual(prompt, slotNumber)
-    clearTpPathVisual()
-    if not _G.TpPathVisual then return end
-    tpVisualPrompt = prompt
-
-    local config = SlotsConfig[slotNumber] or SlotsConfig[1]
-    local positions = config.Positions or { config.Position }
-
-    for i, pos in ipairs(positions) do
-        local marker = createArrowMarker(pos, i)
-        table.insert(tpPathMarkers, marker)
-    end
-
-    local model = brainrotModelByPrompt[prompt]
-    if model then
-        local existing = model:FindFirstChild("_TPTargetHL")
-        if existing then existing:Destroy() end
-        local h = Instance.new("Highlight")
-        h.Name                = "_TPTargetHL"
-        h.Adornee             = model
-        h.FillColor           = Color3.fromRGB(255, 80, 120)
-        h.OutlineColor        = Color3.fromRGB(255, 120, 180)
-        h.FillTransparency    = 0.4
-        h.OutlineTransparency = 0
-        h.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
-        h.Parent              = model
-        tpTargetHighlight = h
-    end
-end
-
-local function autoSelectBestBrainrot(petsList)
-    if not _G.AutoSelectBest or isStealing or autoStealEnabled then return end
-    if #petsList == 0 then return end
-    
-    local bestPet = nil
-    local lowestSlot = math.huge
-    
-    for _, petData in ipairs(petsList) do
-        if petData.slot < lowestSlot then
-            lowestSlot = petData.slot
-            bestPet = petData
-        end
-    end
-    
-    if bestPet then
-        selectedPrompt = bestPet.prompt
-        selectedSlotNumber = bestPet.slot
-        showTpPathVisual(selectedPrompt, selectedSlotNumber)
-    end
-end
-
-local function updatePetList()
-    if isStealing or autoStealEnabled or thisScriptStopped then return end
-    if not scrollListRef then return end
-
-    for _, child in ipairs(scrollListRef:GetChildren()) do
-        if child:IsA("Frame") then child:Destroy() end
-    end
-    brainrotNameGradients = {}
-
-    local plotsFolder = Workspace:FindFirstChild("Plots")
-    if not plotsFolder then return end
-
-    local tempPets = {}
-    for _, plot in ipairs(plotsFolder:GetChildren()) do
-        if not isMyPlot(plot) then
-            local podiums = plot:FindFirstChild("AnimalPodiums")
-            if podiums then
-                for _, podium in ipairs(podiums:GetChildren()) do
-                    local slotNumber  = tonumber(podium.Name:match("%d+")) or 1
-                    local base        = podium:FindFirstChild("Base") or podium
-                    local spawnPoint  = base:FindFirstChild("Spawn")
-                    local attachment  = spawnPoint and spawnPoint:FindFirstChild("PromptAttachment")
-                    if attachment then
-                        for _, child in ipairs(attachment:GetChildren()) do
-                            if child:IsA("ProximityPrompt") and isValidStealPrompt(child) then
-                                local petName = child.ObjectText or "Pet"
-                                table.insert(tempPets, { prompt = child, slot = slotNumber, name = petName })
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    table.sort(tempPets, function(a, b) return a.slot < b.slot end)
-    
-    autoSelectBestBrainrot(tempPets)
-
-    local C_list = {
-        card   = Color3.fromRGB(38, 40, 46),
-        accent = Color3.fromRGB(255, 120, 180),
-        stroke = Color3.fromRGB(180, 80, 130),
-        bright = Color3.fromRGB(235, 235, 240),
-        mute   = Color3.fromRGB(170, 170, 178),
-    }
-
-    for _, petData in ipairs(tempPets) do
-        if thisScriptStopped then break end
-        local isSelected = (selectedPrompt == petData.prompt)
-
-        local row = Instance.new("Frame")
-        row.Size = UDim2.new(1, -8, 0, 40)
-        row.BackgroundColor3 = isSelected and Color3.fromRGB(40, 20, 35) or C_list.card
-        row.BorderSizePixel = 0
-        row.Parent = scrollListRef
-        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 12)
-
-        local rStroke = Instance.new("UIStroke")
-        rStroke.Color     = isSelected and C_list.accent or C_list.stroke
-        rStroke.Thickness = isSelected and 1.5 or 1
-        rStroke.Parent    = row
-
-        local VP_SIZE = 60
-        row.Size = UDim2.new(1, -8, 0, 66)
-
-        local vp = Instance.new("ViewportFrame")
-        vp.Size                   = UDim2.new(0, VP_SIZE, 0, VP_SIZE)
-        vp.Position               = UDim2.new(0, 3, 0.5, -VP_SIZE / 2)
-        vp.BackgroundTransparency = 1
-        vp.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
-        vp.BorderSizePixel        = 0
-        vp.ZIndex                 = 5
-        vp.Parent                 = row
-
-        local vpCam = Instance.new("Camera")
-        vpCam.Parent = vp
-        vp.CurrentCamera = vpCam
-
-        task.spawn(function()
-            local plotsFolder = Workspace:FindFirstChild("Plots")
-            if not plotsFolder then return end
-            local playerNames = {}
-            for _, p in pairs(Players:GetPlayers()) do playerNames[p.Name] = true end
-
-            local foundModel = nil
-            for _, v in ipairs(plotsFolder:GetDescendants()) do
-                if v:IsA("Model") and v.Name == petData.name and not playerNames[v.Name] then
-                    foundModel = v
-                    break
-                end
-            end
-            if not foundModel then return end
-
-            local clone = foundModel:Clone()
-            for _, d in ipairs(clone:GetDescendants()) do
-                if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("Highlight") then
-                    d:Destroy()
-                end
-            end
-            clone.Parent = vp
-
-            local cf, size = clone:GetBoundingBox()
-            local dist = math.max(size.Magnitude * 1.2, 2)
-            local center = cf.Position
-            local height = size.Y * 0.2
-
-            local angle = 0
-            local rotConn
-            rotConn = RunService.Heartbeat:Connect(function(dt)
-                if not vp.Parent then
-                    rotConn:Disconnect()
-                    return
-                end
-                angle = angle + dt * 60
-                local rad = math.rad(angle)
-                vpCam.CFrame = CFrame.new(
-                    center + Vector3.new(math.sin(rad) * dist, height, math.cos(rad) * dist),
-                    center
-                )
-            end)
-            table.insert(ActiveConnections, rotConn)
-        end)
-
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Text               = petData.name
-        nameLabel.Size               = UDim2.new(1, -(VP_SIZE + 18), 1, 0)
-        nameLabel.Position           = UDim2.new(0, VP_SIZE + 10, 0, -4)
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.TextColor3         = Color3.fromRGB(235, 235, 240)
-        nameLabel.Font               = Enum.Font.GothamMedium
-        nameLabel.TextSize           = 13
-        nameLabel.TextXAlignment     = Enum.TextXAlignment.Left
-        nameLabel.Parent             = row
-
-        local nameGrad = Instance.new("UIGradient")
-        nameGrad.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0,  Color3.fromRGB(235, 235, 240)),
-            ColorSequenceKeypoint.new(.5, Color3.fromRGB(255, 150, 200)),
-            ColorSequenceKeypoint.new(1,  Color3.fromRGB(235, 235, 240))
-        })
-        nameGrad.Parent = nameLabel
-        table.insert(brainrotNameGradients, nameGrad)
-
-        local slotLabel = Instance.new("TextLabel")
-        slotLabel.Text               = "slot " .. petData.slot
-        slotLabel.Size               = UDim2.new(1, -(VP_SIZE + 14), 1, 0)
-        slotLabel.Position           = UDim2.new(0, VP_SIZE + 2, 0, 6)
-        slotLabel.BackgroundTransparency = 1
-        slotLabel.TextColor3         = C_list.mute
-        slotLabel.Font               = Enum.Font.GothamMedium
-        slotLabel.TextSize           = 11
-        slotLabel.TextXAlignment     = Enum.TextXAlignment.Right
-        slotLabel.Parent             = row
-
-        local clickBtn = Instance.new("TextButton")
-        clickBtn.Size                = UDim2.new(1, 0, 1, 0)
-        clickBtn.BackgroundTransparency = 1
-        clickBtn.Text               = ""
-        clickBtn.BorderSizePixel    = 0
-        clickBtn.Parent             = row
-
-        local rowBtnConn = clickBtn.MouseButton1Click:Connect(function()
-            if not isStealing and not autoStealEnabled then
-                selectedPrompt     = petData.prompt
-                selectedSlotNumber = petData.slot
-                showTpPathVisual(selectedPrompt, selectedSlotNumber)
-                updatePetList()
-            end
-        end)
-        table.insert(ActiveConnections, rowBtnConn)
-    end
-
-end
-
--- ============================================================
+-- ==========================================
 -- ESP TIMER (OTIMIZADO)
--- ============================================================
+-- ==========================================
 local baseEspInstances = {}
 
 local function createBaseESP(plot, mainPart)
@@ -2313,7 +1581,7 @@ end
 task.spawn(function()
     while true do
         pcall(updateBaseESP)
-        task.wait(0.4)
+        task.wait(0.5)
     end
 end)
 
@@ -2356,66 +1624,572 @@ local function findAdversaryPlot()
 end
 
 -- ==========================================
--- AUTO FLASH TP ON LOW TIMER
+-- AP ESP (OTIMIZADO)
 -- ==========================================
-local lastSeenTimerValue = nil
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if not _G.AutoFlashLowTimer then lastSeenTimerValue = nil continue end
-        if isStealing or autoStealEnabled then continue end
-        if not selectedPrompt or not selectedSlotNumber then continue end
+local apEspInstances = {}
 
-        local timeLabel = nil
-        pcall(function()
-            local advPlot = findAdversaryPlot()
-            local purchases = advPlot and advPlot:FindFirstChild("Purchases")
-            local plotBlock = purchases and purchases:FindFirstChild("PlotBlock")
-            local mainPart = plotBlock and plotBlock:FindFirstChild("Main")
-            timeLabel = mainPart and mainPart:FindFirstChild("BillboardGui") and mainPart.BillboardGui:FindFirstChild("RemainingTime")
-        end)
-        if not timeLabel then
-            lastSeenTimerValue = nil
+local function clearAPESP()
+    for uid, bb in pairs(apEspInstances) do
+        pcall(function() bb:Destroy() end)
+        apEspInstances[uid] = nil
+    end
+end
+
+local function updateAPESP()
+    if not _G.BackpackESP or not _G.ShowAPESP then
+        if next(apEspInstances) then clearAPESP() end
+        return
+    end
+
+    local activePlayers = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LocalPlayer then continue end
+        local char = p.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then continue end
+
+        activePlayers[p.UserId] = true
+
+        local hasAP = pcall(function()
+            return p:GetAttribute("AdminCommands") ~= nil
+        end) and p:GetAttribute("AdminCommands") ~= nil
+
+        if not hasAP then
+            if apEspInstances[p.UserId] then
+                pcall(function() apEspInstances[p.UserId]:Destroy() end)
+                apEspInstances[p.UserId] = nil
+            end
             continue
         end
 
-        local converted = toSecondsOnly(timeLabel.Text)
-        local seconds = tonumber(converted:match("(%d+)"))
-        if not seconds then continue end
+        if not apEspInstances[p.UserId] then
+            local bb = Instance.new("BillboardGui")
+            bb.Name        = "_APESP"
+            bb.Size        = UDim2.new(0, 52, 0, 52)
+            bb.StudsOffset = Vector3.new(3.5, 7, 0)
+            bb.AlwaysOnTop = true
+            bb.Adornee     = hrp
+            bb.MaxDistance = 200
+            bb.Parent      = char
 
-        -- Flash TP quando o timer chega a 1
-        if seconds <= 1 and lastSeenTimerValue and lastSeenTimerValue > 1 then
-            task.spawn(function()
-                startTripToPetSlot(selectedPrompt, selectedSlotNumber)
-            end)
+            local img = Instance.new("ImageLabel")
+            img.Size               = UDim2.new(1, 0, 1, 0)
+            img.BackgroundTransparency = 1
+            img.Image              = "rbxassetid://95529031547606"
+            img.ScaleType          = Enum.ScaleType.Fit
+            img.Parent             = bb
+
+            apEspInstances[p.UserId] = bb
+        else
+            apEspInstances[p.UserId].Adornee = hrp
         end
-
-        lastSeenTimerValue = seconds
     end
-end)
+
+    for uid, bb in pairs(apEspInstances) do
+        if not activePlayers[uid] then
+            pcall(function() bb:Destroy() end)
+            apEspInstances[uid] = nil
+        end
+    end
+end
 
 task.spawn(function()
     while true do
-        pcall(updateBaseESP)
-        task.wait(0.4)
+        pcall(updateAPESP)
+        task.wait(0.8)
     end
 end)
 
--- ============================================================
--- BUILD HUB (CORRIGIDO PARA UI ABRIR)
--- ============================================================
-local function BuildHUB()
-    -- Limpa GUIs antigas
-    local old = PlayerGui:FindFirstChild("Nexyra SCRIPT")
-    if old then old:Destroy() end
-    local oldB = PlayerGui:FindFirstChild("NOXHUB BANNER")
-    if oldB then oldB:Destroy() end
-    local oldN = PlayerGui:FindFirstChild("NOX SCRIPT")
-    if oldN then oldN:Destroy() end
+-- ==========================================
+-- BACKPACK ESP (OTIMIZADO)
+-- ==========================================
+local BACKPACK_TRACKED = {
+    ["Giant Potion"]   = true,
+    ["Flash Teleport"] = true,
+    ["Flying Carpet"]  = true,
+}
 
-    -- ============================================================
-    -- COULEURS (CORES FIXAS - ROSA)
-    -- ============================================================
+local backpackEspInstances = {}
+
+local function clearBackpackESP()
+    for uid, bb in pairs(backpackEspInstances) do
+        pcall(function() bb:Destroy() end)
+        backpackEspInstances[uid] = nil
+    end
+end
+
+local function buildBackpackBillboard(char, hrp, found)
+    local ICON = 48
+    local GAP  = 4
+    local bb = Instance.new("BillboardGui")
+    bb.Name        = "_BackpackESP"
+    bb.Size        = UDim2.new(0, ICON, 0, ICON * #found + GAP * (#found - 1))
+    bb.StudsOffset = Vector3.new(3.5, 0, 0)
+    bb.AlwaysOnTop = true
+    bb.Adornee     = hrp
+    bb.MaxDistance = 200
+    bb.Parent      = char
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection       = Enum.FillDirection.Vertical
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.VerticalAlignment   = Enum.VerticalAlignment.Top
+    layout.Padding             = UDim.new(0, GAP)
+    layout.Parent              = bb
+
+    for _, data in ipairs(found) do
+        local img = Instance.new("ImageLabel")
+        img.Size               = UDim2.new(0, ICON, 0, ICON)
+        img.BackgroundTransparency = 1
+        img.Image              = data.texture ~= "" and data.texture or "rbxassetid://0"
+        img.ScaleType          = Enum.ScaleType.Fit
+        img.Parent             = bb
+    end
+
+    return bb
+end
+
+local function updateBackpackESP()
+    if not _G.BackpackESP then
+        if next(backpackEspInstances) then clearBackpackESP() end
+        return
+    end
+    local activePlayers = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LocalPlayer then continue end
+        local char = p.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then continue end
+
+        activePlayers[p.UserId] = true
+
+        local bp = p:FindFirstChild("Backpack")
+        local found = {}
+        if bp then
+            for _, tool in ipairs(bp:GetChildren()) do
+                if tool:IsA("Tool") then
+                    if tool.Name == "Giant Potion"   and _G.ShowGiantPotion   then
+                        table.insert(found, { name = tool.Name, texture = tool.TextureId or "" })
+                    elseif tool.Name == "Flash Teleport" and _G.ShowFlashTeleport then
+                        table.insert(found, { name = tool.Name, texture = tool.TextureId or "" })
+                    elseif tool.Name == "Flying Carpet"  and _G.ShowFlyingCarpet  then
+                        table.insert(found, { name = tool.Name, texture = tool.TextureId or "" })
+                    end
+                end
+            end
+        end
+
+        if #found == 0 then
+            if backpackEspInstances[p.UserId] then
+                pcall(function() backpackEspInstances[p.UserId]:Destroy() end)
+                backpackEspInstances[p.UserId] = nil
+            end
+            continue
+        end
+
+        local existing = backpackEspInstances[p.UserId]
+        local needRebuild = not existing or existing.Parent == nil or existing.Adornee ~= hrp
+
+        if not needRebuild then
+            local slots = 0
+            for _, c in ipairs(existing:GetChildren()) do
+                if c:IsA("ImageLabel") then slots += 1 end
+            end
+            if slots ~= #found then needRebuild = true end
+        end
+
+        if needRebuild then
+            if existing then pcall(function() existing:Destroy() end) end
+            backpackEspInstances[p.UserId] = buildBackpackBillboard(char, hrp, found)
+        end
+    end
+
+    for uid, bb in pairs(backpackEspInstances) do
+        if not activePlayers[uid] then
+            pcall(function() bb:Destroy() end)
+            backpackEspInstances[uid] = nil
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        pcall(updateBackpackESP)
+        task.wait(0.8)
+    end
+end)
+
+-- ==========================================
+-- TP PATH VISUAL (SIMPLIFICADO)
+-- ==========================================
+local tpPathMarkers = {}
+local tpTargetHighlight = nil
+local tpVisualPrompt = nil
+
+local function clearTpPathVisual()
+    for _, m in ipairs(tpPathMarkers) do
+        pcall(function() m:Destroy() end)
+    end
+    tpPathMarkers = {}
+    if tpTargetHighlight then
+        pcall(function() tpTargetHighlight:Destroy() end)
+        tpTargetHighlight = nil
+    end
+    tpVisualPrompt = nil
+end
+
+local function createArrowMarker(position, index)
+    local part = Instance.new("Part")
+    part.Name        = "_TPPathMarker"
+    part.Anchored    = true
+    part.CanCollide  = false
+    part.CanQuery    = false
+    part.CanTouch    = false
+    part.Transparency = 1
+    part.Size        = Vector3.new(0.2, 0.2, 0.2)
+    part.Position    = position + Vector3.new(0, 5, 0)
+    part.Parent      = Workspace
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name             = "_TPPathBillboard"
+    billboard.Size             = UDim2.new(0, 60, 0, 80)
+    billboard.StudsOffset      = Vector3.new(0, 0, 0)
+    billboard.AlwaysOnTop      = true
+    billboard.Parent           = part
+
+    local arrowLabel = Instance.new("TextLabel")
+    arrowLabel.Size               = UDim2.new(1, 0, 0, 40)
+    arrowLabel.Position           = UDim2.new(0, 0, 0, 0)
+    arrowLabel.BackgroundTransparency = 1
+    arrowLabel.Text               = "▼"
+    arrowLabel.TextColor3         = Color3.fromRGB(255, 120, 180)
+    arrowLabel.TextScaled         = true
+    arrowLabel.Font               = Enum.Font.GothamBold
+    arrowLabel.Parent             = billboard
+
+    local numberLabel = Instance.new("TextLabel")
+    numberLabel.Size               = UDim2.new(1, 0, 0, 30)
+    numberLabel.Position           = UDim2.new(0, 0, 0, 38)
+    numberLabel.BackgroundTransparency = 1
+    numberLabel.Text               = tostring(index)
+    numberLabel.TextColor3         = Color3.fromRGB(255, 255, 255)
+    numberLabel.TextStrokeTransparency = 0
+    numberLabel.TextStrokeColor3   = Color3.fromRGB(0, 0, 0)
+    numberLabel.TextScaled         = true
+    numberLabel.Font               = Enum.Font.GothamBold
+    numberLabel.Parent             = billboard
+
+    return part
+end
+
+local function showTpPathVisual(prompt, slotNumber)
+    clearTpPathVisual()
+    if not _G.TpPathVisual then return end
+    tpVisualPrompt = prompt
+
+    local config = SlotsConfig[slotNumber] or SlotsConfig[1]
+    local positions = config.Positions or { config.Position }
+
+    for i, pos in ipairs(positions) do
+        local marker = createArrowMarker(pos, i)
+        table.insert(tpPathMarkers, marker)
+    end
+end
+
+-- ==========================================
+-- UPDATE PET LIST (SEM BRAINROT HIGHLIGHT)
+-- ==========================================
+local function updatePetList()
+    if isStealing or autoStealEnabled or thisScriptStopped then return end
+    if not scrollListRef then return end
+
+    for _, child in ipairs(scrollListRef:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+
+    local plotsFolder = Workspace:FindFirstChild("Plots")
+    if not plotsFolder then return end
+
+    local tempPets = {}
+    for _, plot in ipairs(plotsFolder:GetChildren()) do
+        if not isMyPlot(plot) then
+            local podiums = plot:FindFirstChild("AnimalPodiums")
+            if podiums then
+                for _, podium in ipairs(podiums:GetChildren()) do
+                    local slotNumber  = tonumber(podium.Name:match("%d+")) or 1
+                    local base        = podium:FindFirstChild("Base") or podium
+                    local spawnPoint  = base:FindFirstChild("Spawn")
+                    local attachment  = spawnPoint and spawnPoint:FindFirstChild("PromptAttachment")
+                    if attachment then
+                        for _, child in ipairs(attachment:GetChildren()) do
+                            if child:IsA("ProximityPrompt") and isValidStealPrompt(child) then
+                                local petName = child.ObjectText or "Pet"
+                                table.insert(tempPets, { prompt = child, slot = slotNumber, name = petName })
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    table.sort(tempPets, function(a, b) return a.slot < b.slot end)
+
+    local C_list = {
+        card   = Color3.fromRGB(38, 40, 46),
+        accent = Color3.fromRGB(255, 120, 180),
+        stroke = Color3.fromRGB(180, 80, 130),
+        bright = Color3.fromRGB(235, 235, 240),
+        mute   = Color3.fromRGB(170, 170, 178),
+    }
+
+    for _, petData in ipairs(tempPets) do
+        if thisScriptStopped then break end
+        local isSelected = (selectedPrompt == petData.prompt)
+
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -8, 0, 66)
+        row.BackgroundColor3 = isSelected and Color3.fromRGB(40, 20, 35) or C_list.card
+        row.BorderSizePixel = 0
+        row.Parent = scrollListRef
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 12)
+
+        local rStroke = Instance.new("UIStroke")
+        rStroke.Color     = isSelected and C_list.accent or C_list.stroke
+        rStroke.Thickness = isSelected and 1.5 or 1
+        rStroke.Parent    = row
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Text               = petData.name
+        nameLabel.Size               = UDim2.new(1, -20, 1, -20)
+        nameLabel.Position           = UDim2.new(0, 12, 0, 10)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextColor3         = Color3.fromRGB(235, 235, 240)
+        nameLabel.Font               = Enum.Font.GothamMedium
+        nameLabel.TextSize           = 13
+        nameLabel.TextXAlignment     = Enum.TextXAlignment.Left
+        nameLabel.Parent             = row
+
+        local slotLabel = Instance.new("TextLabel")
+        slotLabel.Text               = "slot " .. petData.slot
+        slotLabel.Size               = UDim2.new(1, -20, 0, 16)
+        slotLabel.Position           = UDim2.new(0, 12, 0, 38)
+        slotLabel.BackgroundTransparency = 1
+        slotLabel.TextColor3         = C_list.mute
+        slotLabel.Font               = Enum.Font.GothamMedium
+        slotLabel.TextSize           = 11
+        slotLabel.TextXAlignment     = Enum.TextXAlignment.Left
+        slotLabel.Parent             = row
+
+        local clickBtn = Instance.new("TextButton")
+        clickBtn.Size                = UDim2.new(1, 0, 1, 0)
+        clickBtn.BackgroundTransparency = 1
+        clickBtn.Text               = ""
+        clickBtn.BorderSizePixel    = 0
+        clickBtn.Parent             = row
+
+        local rowBtnConn = clickBtn.MouseButton1Click:Connect(function()
+            if not isStealing and not autoStealEnabled then
+                selectedPrompt     = petData.prompt
+                selectedSlotNumber = petData.slot
+                showTpPathVisual(selectedPrompt, selectedSlotNumber)
+                updatePetList()
+            end
+        end)
+        table.insert(ActiveConnections, rowBtnConn)
+    end
+end
+
+-- ==========================================
+-- HEADLESS HORSEMAN (VISUAL)
+-- ==========================================
+local HeadlessVisual = {
+    Enabled = false,
+    Attached = false,
+    AssetId = "rbxassetid://134082579",
+    TargetPart = "Head",
+    PartsToHide = {"Head"},
+    Scale = Vector3.new(1.0, 1.0, 1.0),
+    Offset = CFrame.new(0, 0, 0),
+}
+
+local function attachHeadless()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    
+    local targetPart = char:FindFirstChild(HeadlessVisual.TargetPart)
+    if not targetPart then return false end
+    
+    -- Remove old
+    local oldAsset = char:FindFirstChild("Headless_Visual")
+    if oldAsset then oldAsset:Destroy() end
+    
+    -- Hide parts
+    for _, partName in ipairs(HeadlessVisual.PartsToHide) do
+        local limb = char:FindFirstChild(partName)
+        if limb and limb:IsA("BasePart") then
+            limb.Transparency = 1
+        end
+    end
+    
+    local success, objects = pcall(function()
+        return game:GetObjects(HeadlessVisual.AssetId)
+    end)
+    
+    if not success or not objects or #objects == 0 then
+        return false
+    end
+    
+    local assetModel = objects[1]
+    assetModel.Name = "Headless_Visual"
+    
+    local mainMesh = assetModel:IsA("BasePart") and assetModel or assetModel:FindFirstChildWhichIsA("BasePart", true)
+    if not mainMesh then return false end
+    
+    mainMesh.Size = mainMesh.Size * HeadlessVisual.Scale
+    mainMesh.CanCollide = false
+    mainMesh.CFrame = targetPart.CFrame * HeadlessVisual.Offset
+    
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = targetPart
+    weld.Part1 = mainMesh
+    weld.Parent = mainMesh
+    
+    assetModel.Parent = char
+    HeadlessVisual.Attached = true
+    return true
+end
+
+local function removeHeadless()
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    local oldAsset = char:FindFirstChild("Headless_Visual")
+    if oldAsset then oldAsset:Destroy() end
+    
+    for _, partName in ipairs(HeadlessVisual.PartsToHide) do
+        local limb = char:FindFirstChild(partName)
+        if limb and limb:IsA("BasePart") then
+            limb.Transparency = 0
+        end
+    end
+    
+    HeadlessVisual.Attached = false
+end
+
+local function toggleHeadlessVisual(enable)
+    HeadlessVisual.Enabled = enable
+    if enable then
+        attachHeadless()
+    else
+        removeHeadless()
+    end
+end
+
+-- ==========================================
+-- KORBLOX RIGHT LEG (VISUAL)
+-- ==========================================
+local KorbloxVisual = {
+    Enabled = false,
+    Attached = false,
+    AssetId = "rbxassetid://139607718",
+    TargetPart = "RightUpperLeg",
+    PartsToHide = {"RightUpperLeg", "RightLowerLeg", "RightFoot"},
+    Scale = Vector3.new(1.0, 1.0, 1.0),
+    Offset = CFrame.new(0, 0, 0),
+}
+
+local function attachKorbloxRightLeg()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    
+    local targetPart = char:FindFirstChild(KorbloxVisual.TargetPart)
+    if not targetPart then return false end
+    
+    -- Remove old
+    local oldAsset = char:FindFirstChild("Korblox_RightLeg_Visual")
+    if oldAsset then oldAsset:Destroy() end
+    
+    -- Hide parts
+    for _, partName in ipairs(KorbloxVisual.PartsToHide) do
+        local limb = char:FindFirstChild(partName)
+        if limb and limb:IsA("BasePart") then
+            limb.Transparency = 1
+        end
+    end
+    
+    local success, objects = pcall(function()
+        return game:GetObjects(KorbloxVisual.AssetId)
+    end)
+    
+    if not success or not objects or #objects == 0 then
+        return false
+    end
+    
+    local assetModel = objects[1]
+    assetModel.Name = "Korblox_RightLeg_Visual"
+    
+    local mainMesh = assetModel:IsA("BasePart") and assetModel or assetModel:FindFirstChildWhichIsA("BasePart", true)
+    if not mainMesh then return false end
+    
+    mainMesh.Size = mainMesh.Size * KorbloxVisual.Scale
+    mainMesh.CanCollide = false
+    mainMesh.CFrame = targetPart.CFrame * KorbloxVisual.Offset
+    
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = targetPart
+    weld.Part1 = mainMesh
+    weld.Parent = mainMesh
+    
+    assetModel.Parent = char
+    KorbloxVisual.Attached = true
+    return true
+end
+
+local function removeKorbloxRightLeg()
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    local oldAsset = char:FindFirstChild("Korblox_RightLeg_Visual")
+    if oldAsset then oldAsset:Destroy() end
+    
+    for _, partName in ipairs(KorbloxVisual.PartsToHide) do
+        local limb = char:FindFirstChild(partName)
+        if limb and limb:IsA("BasePart") then
+            limb.Transparency = 0
+        end
+    end
+    
+    KorbloxVisual.Attached = false
+end
+
+local function toggleKorbloxVisual(enable)
+    KorbloxVisual.Enabled = enable
+    if enable then
+        attachKorbloxRightLeg()
+    else
+        removeKorbloxRightLeg()
+    end
+end
+
+-- Re-attach on character respawn
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    task.wait(0.2)
+    if HeadlessVisual.Enabled then
+        attachHeadless()
+    end
+    if KorbloxVisual.Enabled then
+        attachKorbloxRightLeg()
+    end
+end)
+
+-- ==========================================
+-- BUILD HUB (UI OTIMIZADA)
+-- ==========================================
+local function BuildHUB()
+    local old = PlayerGui:FindFirstChild("HIGH HUB")
+    if old then old:Destroy() end
+
     local C = {
         accent     = Color3.fromRGB(255, 120, 180),
         accentHi   = Color3.fromRGB(255, 160, 210),
@@ -2435,9 +2209,6 @@ local function BuildHUB()
         trackOff   = Color3.fromRGB(44,   46,  52),
     }
 
-    -- ============================================================
-    -- DEVICE
-    -- ============================================================
     local function getDevice()
         local isMobil = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
         if isMobil then
@@ -2453,9 +2224,6 @@ local function BuildHUB()
     local screenW = workspace.CurrentCamera.ViewportSize.X
     local screenH = workspace.CurrentCamera.ViewportSize.Y
 
-    -- ============================================================
-    -- SCREENGUI PRINCIPALE
-    -- ============================================================
     local HIGH_HUB_GUI = Instance.new("ScreenGui")
     HIGH_HUB_GUI.Name           = "HIGH HUB"
     HIGH_HUB_GUI.ResetOnSpawn   = false
@@ -2464,9 +2232,6 @@ local function BuildHUB()
     HIGH_HUB_GUI.IgnoreGuiInset = false
     HIGH_HUB_GUI.Parent         = PlayerGui
 
-    -- ============================================================
-    -- SISTEMA DE LOCK/UNLOCK GUI
-    -- ============================================================
     local guiLocked = false
 
     local lockBtn = Instance.new("TextButton")
@@ -2506,12 +2271,6 @@ local function BuildHUB()
                             btn.Visible = false
                         end
                     end
-                    for _, btn in ipairs(child:GetDescendants()) do
-                        if btn:IsA("TextButton") then
-                            btn.AutoButtonColor = false
-                            btn.BackgroundTransparency = math.min(btn.BackgroundTransparency + 0.3, 0.9)
-                        end
-                    end
                 else
                     child.Active = true
                     child.Selectable = true
@@ -2520,12 +2279,6 @@ local function BuildHUB()
                     for _, btn in ipairs(child:GetDescendants()) do
                         if btn:IsA("TextButton") and btn.Name == "" and btn.Size.X.Offset == 18 and btn.Size.Y.Offset == 18 then
                             btn.Visible = true
-                        end
-                    end
-                    for _, btn in ipairs(child:GetDescendants()) do
-                        if btn:IsA("TextButton") then
-                            btn.AutoButtonColor = true
-                            btn.BackgroundTransparency = math.max(btn.BackgroundTransparency - 0.3, 0)
                         end
                     end
                 end
@@ -2541,9 +2294,6 @@ local function BuildHUB()
         updateLockState(false)
     end)
 
-    -- ============================================================
-    -- HELPER : DRAG
-    -- ============================================================
     local function makeDraggable(frame, handle)
         handle = handle or frame
         local dragging, dragStart, startPos
@@ -2572,9 +2322,6 @@ local function BuildHUB()
         end)
     end
 
-    -- ============================================================
-    -- HELPER : RESIZE
-    -- ============================================================
     local function makeResizable(panel, minW, minH)
         local grip = Instance.new("TextButton")
         grip.Size             = UDim2.new(0, 18, 0, 18)
@@ -2620,9 +2367,6 @@ local function BuildHUB()
         end)
     end
 
-    -- ============================================================
-    -- FACTORY : PANEL
-    -- ============================================================
     local HEADER_H = 34
 
     local function makePanel(name, titleText, px, py, pw, ph, minW, minH)
@@ -2677,18 +2421,6 @@ local function BuildHUB()
         titleLbl.Font               = Enum.Font.GothamBold
         titleLbl.TextXAlignment     = Enum.TextXAlignment.Left
         titleLbl.Parent             = hdr
-        
-        local titleGrad = Instance.new("UIGradient", titleLbl)
-        titleGrad.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, C.textBright),
-            ColorSequenceKeypoint.new(.5, C.textMauve),
-            ColorSequenceKeypoint.new(1, C.textBright)
-        })
-        table.insert(ActiveConnections, RunService.Heartbeat:Connect(function()
-            if titleGrad and titleGrad.Parent then
-                titleGrad.Rotation = (tick()*100)%360
-            end
-        end))
 
         local content = Instance.new("Frame")
         content.Name             = "Content"
@@ -2706,92 +2438,84 @@ local function BuildHUB()
         return panel, content, hdr, titleLbl
     end
 
-    -- ============================================================
     -- PANEL 1 : ACTIONS
-    -- ============================================================
-    local FLASHTP, flashAccent, BLOCK, blockAccent, RESET, resetAccent
-    do
-        local AW = isMob and 300 or 360
-        local ACT_BTN_W = isMob and 85 or 100
-        local ACT_BTN_H = isMob and 32 or 36
-        local ACT_PADDING = 6
-        local ACT_COUNT   = 3
-        local AH = HEADER_H + 12 + ACT_BTN_H + 8
+    local AW = isMob and 300 or 360
+    local ACT_BTN_W = isMob and 85 or 100
+    local ACT_BTN_H = isMob and 32 or 36
+    local ACT_PADDING = 6
+    local ACT_COUNT   = 3
+    local AH = HEADER_H + 12 + ACT_BTN_H + 8
 
-        local actionsPanel, actionsContent, actionsHdr = makePanel(
-            "ActionsPanel", "ACTIONS",
-            math.floor(screenW / 2 - AW / 2),
-            math.floor(screenH * 0.07),
-            AW, AH, 170, AH
-        )
-        registerPanelLayout(actionsPanel, "ActionsPanel", 170, AH)
+    local actionsPanel, actionsContent, actionsHdr = makePanel(
+        "ActionsPanel", "ACTIONS",
+        math.floor(screenW / 2 - AW / 2),
+        math.floor(screenH * 0.07),
+        AW, AH, 170, AH
+    )
+    registerPanelLayout(actionsPanel, "ActionsPanel", 170, AH)
 
-        local btnContainer = Instance.new("Frame")
-        btnContainer.Name                  = "ActionsContainer"
-        btnContainer.Size                  = UDim2.new(1, -14, 1, -10)
-        btnContainer.Position              = UDim2.new(0, 7, 0, 6)
-        btnContainer.BackgroundTransparency = 1
-        btnContainer.BorderSizePixel       = 0
-        btnContainer.ZIndex                = 6
-        btnContainer.Parent                = actionsContent
+    local btnContainer = Instance.new("Frame")
+    btnContainer.Name                  = "ActionsContainer"
+    btnContainer.Size                  = UDim2.new(1, -14, 1, -10)
+    btnContainer.Position              = UDim2.new(0, 7, 0, 6)
+    btnContainer.BackgroundTransparency = 1
+    btnContainer.BorderSizePixel       = 0
+    btnContainer.ZIndex                = 6
+    btnContainer.Parent                = actionsContent
 
-        local UIListAct = Instance.new("UIListLayout")
-        UIListAct.FillDirection      = Enum.FillDirection.Horizontal
-        UIListAct.VerticalAlignment  = Enum.VerticalAlignment.Center
-        UIListAct.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        UIListAct.SortOrder          = Enum.SortOrder.LayoutOrder
-        UIListAct.Padding            = UDim.new(0, ACT_PADDING)
-        UIListAct.Parent             = btnContainer
+    local UIListAct = Instance.new("UIListLayout")
+    UIListAct.FillDirection      = Enum.FillDirection.Horizontal
+    UIListAct.VerticalAlignment  = Enum.VerticalAlignment.Center
+    UIListAct.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    UIListAct.SortOrder          = Enum.SortOrder.LayoutOrder
+    UIListAct.Padding            = UDim.new(0, ACT_PADDING)
+    UIListAct.Parent             = btnContainer
 
-        local function mkActionBtn(name, txt, order)
-            local b = Instance.new("TextButton")
-            b.Name                   = name
-            b.Size                   = UDim2.new(0, ACT_BTN_W, 0, ACT_BTN_H)
-            b.BackgroundColor3       = C.card
-            b.BackgroundTransparency = 0.2
-            b.BorderSizePixel        = 0
-            b.ZIndex                 = 7
-            b.Text                   = ""
-            b.AutoButtonColor        = false
-            b.LayoutOrder            = order
-            b.Parent                 = btnContainer
-            Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
-            local bs = Instance.new("UIStroke", b)
-            bs.Color     = C.strokeDim
-            bs.Thickness = 1
-            bs.Transparency = 0.35
-            local lbl = Instance.new("TextLabel")
-            lbl.Size               = UDim2.new(1, -4, 1, 0)
-            lbl.Position           = UDim2.new(0, 2, 0, 0)
-            lbl.BackgroundTransparency = 1
-            lbl.ZIndex             = 9
-            lbl.Text               = txt
-            lbl.TextColor3         = C.textBright
-            lbl.TextSize           = isMob and 9 or 11
-            lbl.Font               = Enum.Font.GothamBold
-            lbl.TextWrapped        = true
-            lbl.TextXAlignment     = Enum.TextXAlignment.Center
-            lbl.TextYAlignment     = Enum.TextYAlignment.Center
-            lbl.Parent             = b
-            local bar = Instance.new("Frame")
-            bar.Name             = "AccentBar"
-            bar.Size             = UDim2.new(0, 0, 0, 0)
-            bar.BackgroundColor3 = C.stroke
-            bar.BackgroundTransparency = 1
-            bar.BorderSizePixel  = 0
-            bar.ZIndex           = 1
-            bar.Parent           = b
-            return b, bar, lbl
-        end
-
-        FLASHTP, flashAccent = mkActionBtn("FLASHTP", "FLASH TP", 1)
-        BLOCK,   blockAccent = mkActionBtn("BLOCK",   "BLOCK",    2)
-        RESET,   resetAccent = mkActionBtn("RESET",   "RESET",    3)
+    local function mkActionBtn(name, txt, order)
+        local b = Instance.new("TextButton")
+        b.Name                   = name
+        b.Size                   = UDim2.new(0, ACT_BTN_W, 0, ACT_BTN_H)
+        b.BackgroundColor3       = C.card
+        b.BackgroundTransparency = 0.2
+        b.BorderSizePixel        = 0        b.ZIndex                 = 7
+        b.Text                   = ""
+        b.AutoButtonColor        = false
+        b.LayoutOrder            = order
+        b.Parent                 = btnContainer
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+        local bs = Instance.new("UIStroke", b)
+        bs.Color     = C.strokeDim
+        bs.Thickness = 1
+        bs.Transparency = 0.35
+        local lbl = Instance.new("TextLabel")
+        lbl.Size               = UDim2.new(1, -4, 1, 0)
+        lbl.Position           = UDim2.new(0, 2, 0, 0)
+        lbl.BackgroundTransparency = 1
+        lbl.ZIndex             = 9
+        lbl.Text               = txt
+        lbl.TextColor3         = C.textBright
+        lbl.TextSize           = isMob and 9 or 11
+        lbl.Font               = Enum.Font.GothamBold
+        lbl.TextWrapped        = true
+        lbl.TextXAlignment     = Enum.TextXAlignment.Center
+        lbl.TextYAlignment     = Enum.TextYAlignment.Center
+        lbl.Parent             = b
+        local bar = Instance.new("Frame")
+        bar.Name             = "AccentBar"
+        bar.Size             = UDim2.new(0, 0, 0, 0)
+        bar.BackgroundColor3 = C.stroke
+        bar.BackgroundTransparency = 1
+        bar.BorderSizePixel  = 0
+        bar.ZIndex           = 1
+        bar.Parent           = b
+        return b, bar, lbl
     end
 
-    -- ============================================================
+    local FLASHTP, flashAccent = mkActionBtn("FLASHTP", "FLASH TP", 1)
+    local BLOCK, blockAccent = mkActionBtn("BLOCK", "BLOCK", 2)
+    local RESET, resetAccent = mkActionBtn("RESET", "RESET", 3)
+
     -- PANEL 2 : BRAINROTS
-    -- ============================================================
     local BW = isMob and 198 or 234
     local BH = isMob and 195 or 245
 
@@ -2831,9 +2555,7 @@ local function BuildHUB()
 
     scrollListRef = ScrollingFrame
 
-    -- ============================================================
     -- PANEL 3 : SETTINGS
-    -- ============================================================
     local SW = isMob and 320 or 380
     local SH = isMob and 350 or 420
 
@@ -2860,9 +2582,7 @@ local function BuildHUB()
     sCloseBtn.Parent           = settingsHdr
     sCloseBtn.MouseButton1Click:Connect(function() settingsPanel.Visible = false end)
 
-    -- ============================================================
     -- ABAS VERTICAIS
-    -- ============================================================
     local TAB_PANEL_W = 52
     local TAB_BTN_H = 32
 
@@ -3230,9 +2950,7 @@ local function BuildHUB()
         return row
     end
 
-    -- ============================================================
-    -- OUVERTURA SETTINGS
-    -- ============================================================
+    -- OUVERTURE SETTINGS
     local settingsOpen = false
     local function toggleSettings()
         settingsOpen = not settingsOpen
@@ -3267,9 +2985,7 @@ local function BuildHUB()
         mBtn.MouseButton1Click:Connect(toggleSettings)
     end
 
-    -- ============================================================
     -- PANEL 4 : QUICK ADMIN PANEL
-    -- ============================================================
     local QW = isMob and 300 or 340
     local QH = isMob and 220 or 260
 
@@ -3631,13 +3347,11 @@ local function BuildHUB()
         end
     end)
 
-    -- ============================================================
+    -- ==========================================
     -- CONTENU SETTINGS
-    -- ============================================================
+    -- ==========================================
     settingsGetters = {
         AutoResetOnBalloon = function() return _G.AutoResetOnBalloon end,
-        AutoFlashTP        = function() return _G.AutoFlashTP end,
-        AutoFlashLowTimer  = function() return _G.AutoFlashLowTimer end,
         RagdollBypass      = function() return _G.RagdollBypass end,
         AutoGiant          = function() return _G.AutoGiant end,
         AutoBlock          = function() return _G.AutoBlock end,
@@ -3651,7 +3365,6 @@ local function BuildHUB()
         EspTimer           = function() return _G.EspTimer end,
         QuickAP            = function() return _G.QuickAP end,
         AutoReturnBase     = function() return _G.AutoReturnBase end,
-        BrainrotHighlight  = function() return _G.BrainrotHighlight end,
         TpPathVisual       = function() return _G.TpPathVisual end,
         WalkItem           = function() return _G.WalkItem end,
         BackpackESP        = function() return _G.BackpackESP end,
@@ -3659,11 +3372,13 @@ local function BuildHUB()
         ShowGiantPotion    = function() return _G.ShowGiantPotion end,
         ShowFlashTeleport  = function() return _G.ShowFlashTeleport end,
         ShowFlyingCarpet   = function() return _G.ShowFlyingCarpet end,
-        Aimbot                             = function() return _G.AimbotEnabled or false end,
-        QuickPickup                        = function() return _G.QuickPickup or false end,
-        LaggerOnFlash                      = function() return _G.LaggerOnFlash or false end,
-        LaggerPower                        = function() return _G.LaggerPower or 50 end,
-        FlashSpeed                         = function() return _G.FlashSpeed or 100 end,
+        QuickPickup        = function() return _G.QuickPickup or false end,
+        LaggerOnFlash      = function() return _G.LaggerOnFlash or false end,
+        LaggerPower        = function() return _G.LaggerPower or 50 end,
+        FlashSpeed         = function() return _G.FlashSpeed or 100 end,
+        FrameResetEnabled  = function() return _G.FrameResetEnabled or false end,
+        HeadlessVisual     = function() return _G.HeadlessVisual or false end,
+        KorbloxVisual      = function() return _G.KorbloxVisual or false end,
     }
 
     -- ===== TAB: RESET =====
@@ -3684,12 +3399,6 @@ local function BuildHUB()
 
     -- ===== TAB: FLASH TP =====
     sectionHeader(ScrollFlash, "  FLASH TP  ")
-    toggleRow(ScrollFlash, "Auto Flash TP On Low Timer", _G.AutoFlashLowTimer, function(v)
-        _G.AutoFlashLowTimer = v
-    end)
-    toggleRow(ScrollFlash, "Auto Flash TP On Reset", _G.AutoFlashTP, function(v)
-        _G.AutoFlashTP = v
-    end)
     toggleRow(ScrollFlash, "Auto Giant", _G.AutoGiant, function(v)
         _G.AutoGiant = v
     end)
@@ -3697,14 +3406,14 @@ local function BuildHUB()
         _G.RagdollBypass = v
     end)
 
-    -- Lagger on Flash TP (KAY VERSION)
+    -- Lagger on Flash TP
     toggleRow(ScrollFlash, "Lagger on Flash TP", _G.LaggerOnFlash, function(v)
         _G.LaggerOnFlash = v
         if not v then stopFlashLagger() end
         saveSettings()
     end)
 
-    -- Lagger Power Slider (KAY STYLE - 0 a 100)
+    -- Lagger Power Slider
     do
         sectionOrder += 1
         local lagLblRow = Instance.new("Frame")
@@ -3743,7 +3452,7 @@ local function BuildHUB()
         lagTrack.Size = UDim2.new(0.92, 0, 0, 6)
         lagTrack.AnchorPoint = Vector2.new(0.5, 0)
         lagTrack.Position = UDim2.new(0.5, 0, 0, 26)
-        lagTrack.BackgroundColor3 = C.cardDark or C.card
+        lagTrack.BackgroundColor3 = C.card
         lagTrack.BackgroundTransparency = 0.3
         lagTrack.BorderSizePixel = 0
         lagTrack.ZIndex = 6
@@ -3787,7 +3496,7 @@ local function BuildHUB()
         end)
     end
 
-    -- Flash Speed Slider (0% a 200%)
+    -- Flash Speed Slider
     do
         sectionOrder += 1
         local speedLblRow = Instance.new("Frame")
@@ -3826,7 +3535,7 @@ local function BuildHUB()
         speedTrack.Size = UDim2.new(0.92, 0, 0, 6)
         speedTrack.AnchorPoint = Vector2.new(0.5, 0)
         speedTrack.Position = UDim2.new(0.5, 0, 0, 26)
-        speedTrack.BackgroundColor3 = C.cardDark or C.card
+        speedTrack.BackgroundColor3 = C.card
         speedTrack.BackgroundTransparency = 0.3
         speedTrack.BorderSizePixel = 0
         speedTrack.ZIndex = 6
@@ -3956,8 +3665,11 @@ local function BuildHUB()
     end)
     toggleRow(ScrollMisc, "Auto Balloon", _G.AutoBalloon, function(v)
         _G.AutoBalloon = v
-        BalloonState.Auto = v
-        if not v then BalloonState.Active = {} end
+        KayBalloon.Enabled = v
+        if not v then 
+            KayBalloon.Active = {}
+            KayBalloon.WallActive = {}
+        end
     end)
     toggleRow(ScrollMisc, "Anti Ragdoll", antiRagdollEnabled, function(v)
         antiRagdollEnabled = v
@@ -3975,203 +3687,6 @@ local function BuildHUB()
         QuickPickup.set(v)
         if not v then QuickPickup.set(false) end
         saveSettings()
-    end)
-
-    -- ============================================================
-    -- AP ESP
-    -- ============================================================
-    local apEspInstances = {}
-
-    local function clearAPESP()
-        for uid, bb in pairs(apEspInstances) do
-            pcall(function() bb:Destroy() end)
-            apEspInstances[uid] = nil
-        end
-    end
-
-    local function updateAPESP()
-        if not _G.BackpackESP or not _G.ShowAPESP then
-            if next(apEspInstances) then clearAPESP() end
-            return
-        end
-
-        local activePlayers = {}
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p == LocalPlayer then continue end
-            local char = p.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if not hrp then continue end
-
-            activePlayers[p.UserId] = true
-
-            local hasAP = pcall(function()
-                return p:GetAttribute("AdminCommands") ~= nil
-            end) and p:GetAttribute("AdminCommands") ~= nil
-
-            if not hasAP then
-                if apEspInstances[p.UserId] then
-                    pcall(function() apEspInstances[p.UserId]:Destroy() end)
-                    apEspInstances[p.UserId] = nil
-                end
-                continue
-            end
-
-            if not apEspInstances[p.UserId] then
-                local bb = Instance.new("BillboardGui")
-                bb.Name        = "_APESP"
-                bb.Size        = UDim2.new(0, 52, 0, 52)
-                bb.StudsOffset = Vector3.new(3.5, 7, 0)
-                bb.AlwaysOnTop = true
-                bb.Adornee     = hrp
-                bb.MaxDistance = 200
-                bb.Parent      = char
-
-                local img = Instance.new("ImageLabel")
-                img.Size               = UDim2.new(1, 0, 1, 0)
-                img.BackgroundTransparency = 1
-                img.Image              = "rbxassetid://95529031547606"
-                img.ScaleType          = Enum.ScaleType.Fit
-                img.Parent             = bb
-
-                apEspInstances[p.UserId] = bb
-            else
-                apEspInstances[p.UserId].Adornee = hrp
-            end
-        end
-
-        for uid, bb in pairs(apEspInstances) do
-            if not activePlayers[uid] then
-                pcall(function() bb:Destroy() end)
-                apEspInstances[uid] = nil
-            end
-        end
-    end
-
-    task.spawn(function()
-        while true do
-            pcall(updateAPESP)
-            task.wait(0.5)
-        end
-    end)
-
-    -- ============================================================
-    -- BACKPACK ESP
-    -- ============================================================
-    local BACKPACK_TRACKED = {
-        ["Giant Potion"]   = true,
-        ["Flash Teleport"] = true,
-        ["Flying Carpet"]  = true,
-    }
-
-    local backpackEspInstances = {}
-
-    local function clearBackpackESP()
-        for uid, bb in pairs(backpackEspInstances) do
-            pcall(function() bb:Destroy() end)
-            backpackEspInstances[uid] = nil
-        end
-    end
-
-    local function buildBackpackBillboard(char, hrp, found)
-        local count = #found
-        local ICON = 48
-        local GAP  = 4
-        local bb = Instance.new("BillboardGui")
-        bb.Name        = "_BackpackESP"
-        bb.Size        = UDim2.new(0, ICON, 0, ICON * count + GAP * (count - 1))
-        bb.StudsOffset = Vector3.new(3.5, 0, 0)
-        bb.AlwaysOnTop = true
-        bb.Adornee     = hrp
-        bb.MaxDistance = 200
-        bb.Parent      = char
-
-        local layout = Instance.new("UIListLayout")
-        layout.FillDirection       = Enum.FillDirection.Vertical
-        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        layout.VerticalAlignment   = Enum.VerticalAlignment.Top
-        layout.Padding             = UDim.new(0, GAP)
-        layout.Parent              = bb
-
-        for _, data in ipairs(found) do
-            local img = Instance.new("ImageLabel")
-            img.Size               = UDim2.new(0, ICON, 0, ICON)
-            img.BackgroundTransparency = 1
-            img.Image              = data.texture ~= "" and data.texture or "rbxassetid://0"
-            img.ScaleType          = Enum.ScaleType.Fit
-            img.Parent             = bb
-        end
-
-        return bb
-    end
-
-    local function updateBackpackESP()
-        if not _G.BackpackESP then
-            if next(backpackEspInstances) then clearBackpackESP() end
-            return
-        end
-        local activePlayers = {}
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p == LocalPlayer then continue end
-            local char = p.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if not hrp then continue end
-
-            activePlayers[p.UserId] = true
-
-            local bp = p:FindFirstChild("Backpack")
-            local found = {}
-            if bp then
-                for _, tool in ipairs(bp:GetChildren()) do
-                    if tool:IsA("Tool") then
-                        if tool.Name == "Giant Potion"   and _G.ShowGiantPotion   then
-                            table.insert(found, { name = tool.Name, texture = tool.TextureId or "" })
-                        elseif tool.Name == "Flash Teleport" and _G.ShowFlashTeleport then
-                            table.insert(found, { name = tool.Name, texture = tool.TextureId or "" })
-                        elseif tool.Name == "Flying Carpet"  and _G.ShowFlyingCarpet  then
-                            table.insert(found, { name = tool.Name, texture = tool.TextureId or "" })
-                        end
-                    end
-                end
-            end
-
-            if #found == 0 then
-                if backpackEspInstances[p.UserId] then
-                    pcall(function() backpackEspInstances[p.UserId]:Destroy() end)
-                    backpackEspInstances[p.UserId] = nil
-                end
-                continue
-            end
-
-            local existing = backpackEspInstances[p.UserId]
-            local needRebuild = not existing or existing.Parent == nil or existing.Adornee ~= hrp
-
-            if not needRebuild then
-                local slots = 0
-                for _, c in ipairs(existing:GetChildren()) do
-                    if c:IsA("Frame") then slots += 1 end
-                end
-                if slots ~= #found then needRebuild = true end
-            end
-
-            if needRebuild then
-                if existing then pcall(function() existing:Destroy() end) end
-                backpackEspInstances[p.UserId] = buildBackpackBillboard(char, hrp, found)
-            end
-        end
-
-        for uid, bb in pairs(backpackEspInstances) do
-            if not activePlayers[uid] then
-                pcall(function() bb:Destroy() end)
-                backpackEspInstances[uid] = nil
-            end
-        end
-    end
-
-    task.spawn(function()
-        while true do
-            pcall(updateBackpackESP)
-            task.wait(0.5)
-        end
     end)
 
     -- ===== TAB: VISUAL =====
@@ -4301,31 +3816,27 @@ local function BuildHUB()
             gearBtn.TextColor3 = subOpen and C.accent or C.textMute
         end)
     end
-    sectionHeader(ScrollVisual, "  BRAINROT  ")
-    toggleRow(ScrollVisual, "Brainrot Highlight", _G.BrainrotHighlight, function(v)
-        _G.BrainrotHighlight = v
-        if not v then clearBrainrotHighlights() end
+
+    -- ===== TAB: VISUAL - NOVAS OPÇÕES =====
+    sectionHeader(ScrollVisual, "  WEEKLY VISUALS  ")
+    toggleRow(ScrollVisual, "Headless Horseman", _G.HeadlessVisual, function(v)
+        _G.HeadlessVisual = v
+        toggleHeadlessVisual(v)
+        saveSettings()
     end)
-    toggleRow(ScrollVisual, "TP Path Visual", _G.TpPathVisual, function(v)
-        _G.TpPathVisual = v
-        if v and selectedPrompt and selectedSlotNumber and not isStealing and not autoStealEnabled then
-            showTpPathVisual(selectedPrompt, selectedSlotNumber)
-        else
-            clearTpPathVisual()
-        end
+    toggleRow(ScrollVisual, "Korblox Right Leg", _G.KorbloxVisual, function(v)
+        _G.KorbloxVisual = v
+        toggleKorbloxVisual(v)
+        saveSettings()
     end)
 
     dropdownRow(ScrollMisc, "Walk Item", WalkItemOptions, _G.WalkItem, function(choice)
         _G.WalkItem = choice
     end)
 
-    toggleRow(ScrollMisc, "Aimbot", _G.AimbotEnabled or false, function(v)
-        _G.ToggleAimbot(v)
-    end)
-
-    -- ============================================================
+    -- ==========================================
     -- INTERACOES BOTOES ACTIONS
-    -- ============================================================
+    -- ==========================================
     local function hookButton(btn)
         local stroke = btn:FindFirstChildOfClass("UIStroke")
         btn.MouseEnter:Connect(function()
@@ -4373,24 +3884,12 @@ local function BuildHUB()
     end)
 
     task.spawn(function()
-        while task.wait(1.5) do
+        while task.wait(0.8) do
             if thisScriptStopped then break end
             updatePetList()
         end
     end)
     updatePetList()
-
-    local charAddedConnForReset = LocalPlayer.CharacterAdded:Connect(function(newChar)
-        if _G.AutoFlashTP and selectedPrompt and selectedSlotNumber then
-            task.delay(0.2, function()
-                if not isStealing and not autoStealEnabled then
-                    startTripToPetSlot(selectedPrompt, selectedSlotNumber)
-                end
-            end)
-        end
-        _resetWasByBalloon = false
-    end)
-    table.insert(ActiveConnections, charAddedConnForReset)
 
     local keybinds = {
         flash  = Enum.KeyCode.F,
@@ -4452,19 +3951,7 @@ local function BuildHUB()
 
     loadKeybinds()
 
-    task.defer(function()
-        local lbl = FLASHTP:FindFirstChildOfClass("TextLabel")
-        if lbl then lbl.Text = "FLASH TP" end
-        lbl = BLOCK:FindFirstChildOfClass("TextLabel")
-        if lbl then lbl.Text = "BLOCK" end
-        lbl = RESET:FindFirstChildOfClass("TextLabel")
-        if lbl then lbl.Text = "RESET" end
-    end)
-
     local function attachKeybindRightClick(btn, actionName, labelPrefix)
-        btn.MouseEnter:Connect(function() end)
-        btn.MouseLeave:Connect(function() end)
-
         btn.InputBegan:Connect(function(inp)
             if inp.UserInputType ~= Enum.UserInputType.MouseButton2 then return end
             if listeningAction then return end
@@ -4504,50 +3991,32 @@ local function BuildHUB()
         attachKeybindRightClick(BLOCK,   "block", "BLOCK")
         attachKeybindRightClick(RESET,   "reset", "RESET")
     end)
+end
 
-    do
-        local actionGradients = {}
+-- Aplicar estados iniciais dos visuais
+if _G.HeadlessVisual then
+    task.spawn(function()
+        task.wait(0.5)
+        attachHeadless()
+    end)
+end
 
-        local function applyTitleStyle(btn)
-            if not btn then return end
-            local lbl = btn:FindFirstChildOfClass("TextLabel")
-            if not lbl then return end
-            lbl.TextColor3 = C.textBright
-            local g = lbl:FindFirstChildOfClass("UIGradient")
-            if not g then
-                g = Instance.new("UIGradient")
-                g.Parent = lbl
-            end
-            g.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0,  C.textBright),
-                ColorSequenceKeypoint.new(.5, C.textMauve),
-                ColorSequenceKeypoint.new(1,  C.textBright)
-            })
-            table.insert(actionGradients, g)
-        end
+if _G.KorbloxVisual then
+    task.spawn(function()
+        task.wait(0.5)
+        attachKorbloxRightLeg()
+    end)
+end
 
-        applyTitleStyle(FLASHTP)
-        applyTitleStyle(BLOCK)
-        applyTitleStyle(RESET)
-
-        table.insert(ActiveConnections, RunService.Heartbeat:Connect(function()
-            local rot = (tick()*100)%360
-            for _, g in ipairs(actionGradients) do
-                if g and g.Parent then
-                    g.Rotation = rot
-                end
-            end
-            for _, g in ipairs(brainrotNameGradients) do
-                if g and g.Parent then
-                    g.Rotation = rot
-                end
-            end
-        end))
-    end
+if _G.FrameResetEnabled then
+    task.spawn(function()
+        task.wait(0.5)
+        toggleFrameReset(true)
+    end)
 end
 
 -- ==========================================
--- CHAMA O BUILD DA UI COM SEGURANÇA
+-- CHAMA O BUILD DA UI
 -- ==========================================
 task.defer(function()
     pcall(BuildHUB)
@@ -4566,11 +4035,17 @@ local function cleanup()
     stopAutoResetTiny()
     stopAutoResetJail()
     StopResetSequence()
-    clearBrainrotHighlights()
     clearTpPathVisual()
     clearBaseESP()
     clearBackpackESP()
     clearAPESP()
+    KayBalloon.Active = {}
+    KayBalloon.WallActive = {}
+   
+    
+    -- Cleanup visuais
+    removeHeadless()
+    removeKorbloxRightLeg()
 end
 
 game:GetService("ScriptContext"):GetScriptsAddedSignal():Connect(function()
